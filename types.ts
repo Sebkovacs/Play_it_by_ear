@@ -6,6 +6,7 @@ export enum GamePhase {
   PLAYING = 'PLAYING',
   GUESSING = 'GUESSING', // Active guessing state
   RESULT = 'RESULT',
+  GAME_OVER = 'GAME_OVER',
   ERROR = 'ERROR'
 }
 
@@ -33,6 +34,12 @@ export interface Scenarios {
   topic: string;
 }
 
+export interface Award {
+  title: string;
+  description: string;
+  emoji: string;
+}
+
 export interface RoundHistory {
   id: string;
   topic: string;
@@ -45,6 +52,12 @@ export interface GameResult {
   reason: string;
   guesserName?: string;
   wasCorrect?: boolean;
+  awards?: Record<string, Award>; // PlayerId -> Award
+}
+
+export interface UserStats {
+  gamesPlayed: number;
+  wins: number;
 }
 
 export interface GameState {
@@ -58,10 +71,16 @@ export interface GameState {
   history: RoundHistory[];
   lastResult: GameResult | null;
   guesserId: string | null; // ID of player currently guessing
+  
+  // New State for Multi-round
+  currentRound: number;
+  totalRounds: number;
+  maxToneDeaf: number; // 0, 1, or 2
+  scores: Record<string, number>; // PlayerId -> Score
 }
 
 // Network Payloads
-export type MessageType = 'STATE_UPDATE' | 'JOIN_REQUEST' | 'TOGGLE_READY' | 'SUBMIT_TOPIC' | 'START_GUESS' | 'SUBMIT_GUESS' | 'CANCEL_GUESS' | 'REVEAL_GUESS' | 'RESET_GAME';
+export type MessageType = 'STATE_UPDATE' | 'JOIN_REQUEST' | 'TOGGLE_READY' | 'SUBMIT_TOPIC' | 'START_GUESS' | 'SUBMIT_GUESS' | 'CANCEL_GUESS' | 'REVEAL_GUESS' | 'RESET_GAME' | 'NEXT_ROUND';
 
 export interface NetworkMessage {
   type: MessageType;

@@ -7,38 +7,33 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Roboto', 'sans-serif'],
+              sans: ['Inter', 'sans-serif'],
             },
             colors: {
-              m3: {
-                primary: '#6750A4',
-                onPrimary: '#FFFFFF',
-                primaryContainer: '#EADDFF',
-                onPrimaryContainer: '#21005D',
-                secondary: '#625B71',
-                onSecondary: '#FFFFFF',
-                secondaryContainer: '#E8DEF8',
-                onSecondaryContainer: '#1D192B',
-                tertiary: '#7D5260',
-                onTertiary: '#FFFFFF',
-                tertiaryContainer: '#FFD8E4',
-                onTertiaryContainer: '#31111D',
-                background: '#FEF7FF',
-                onBackground: '#1D1B20',
-                surface: '#FEF7FF',
-                onSurface: '#1D1B20',
-                surfaceVariant: '#E7E0EC',
-                onSurfaceVariant: '#49454F',
-                outline: '#79747E',
-                error: '#B3261E',
-                onError: '#FFFFFF',
+              brand: {
+                background: '#f8f5f2', // Warm off-white
+                darkBlue: '#121212', // Near Black
+                navy: '#333333',     // Dark Gray
+                teal: '#2ec4b6',     // Pop Teal
+                orange: '#ff9f1c',   // Pop Orange
+                yellow: '#ffbf69',   // Pop Yellow
+                lime: '#cbf3f0',     // Light Mint
+                red: '#e71d36',      // Pop Red
               }
+            },
+            boxShadow: {
+              'hard': '4px 4px 0px 0px #121212',
+              'hard-sm': '2px 2px 0px 0px #121212',
+              'hard-lg': '8px 8px 0px 0px #121212',
+            },
+            borderWidth: {
+              '3': '3px',
             }
           }
         }
@@ -46,8 +41,23 @@
     </script>
     <style>
       body {
-        background-color: #FEF7FF;
-        color: #1D1B20;
+        background-color: #f8f5f2;
+        color: #121212;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-left: 2px solid #121212;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #121212;
+        border: 2px solid #f1f1f1;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #333;
       }
     </style>
 <script type="importmap">

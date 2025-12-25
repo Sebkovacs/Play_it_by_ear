@@ -14,17 +14,26 @@ export const Button: React.FC<ButtonProps> = ({
   ...props 
 }) => {
   
-  const baseStyles = "relative overflow-hidden h-10 px-6 rounded-full font-medium text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none";
+  // Base: Bold border, hard shadow transition, uppercase text
+  const baseStyles = "relative h-14 px-6 rounded-lg font-black text-sm tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 border-2 border-brand-darkBlue active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none";
   
   const variants = {
-    filled: "bg-m3-primary text-m3-onPrimary hover:bg-opacity-90 shadow-sm hover:shadow-md",
-    tonal: "bg-m3-secondaryContainer text-m3-onSecondaryContainer hover:bg-opacity-80",
-    outlined: "border border-m3-outline text-m3-primary hover:bg-m3-primary/10",
-    text: "text-m3-primary hover:bg-m3-primary/10 bg-transparent"
+    // Primary action: Black or Pop Color with Hard Shadow
+    filled: "bg-brand-darkBlue text-white shadow-hard hover:bg-brand-navy hover:shadow-hard-lg",
+    
+    // Secondary: Light background, Hard Shadow
+    tonal: "bg-brand-teal text-brand-darkBlue shadow-hard hover:bg-brand-teal/80 hover:shadow-hard-lg",
+    
+    // Outlined: Transparent, border, hard shadow
+    outlined: "bg-transparent text-brand-darkBlue shadow-hard hover:bg-brand-darkBlue/5",
+    
+    // Text: No shadow, just bold text
+    text: "border-transparent bg-transparent text-brand-darkBlue hover:bg-brand-darkBlue/5 shadow-none active:translate-x-0 active:translate-y-0"
   };
 
   const widthStyle = fullWidth ? "w-full" : "";
 
+  // Override specific variants if classname passes bg colors to maintain the hard shadow style
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${widthStyle} ${className}`}

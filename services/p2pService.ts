@@ -14,9 +14,9 @@ export class P2PService {
 
   constructor() {}
 
-  // Generate a 4-char uppercase code
+  // Generate a 4-char case-sensitive alphanumeric code
   generateRoomCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, 1, O, 0
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
     for (let i = 0; i < 4; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));

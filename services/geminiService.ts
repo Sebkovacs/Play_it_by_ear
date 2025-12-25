@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Scenarios } from "../types";
+import { Scenarios, Player, Award } from "../types";
 
 // Initialize Gemini API
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -66,5 +66,126 @@ export const generateGameScenarios = async (topic?: string): Promise<Scenarios> 
   } catch (error) {
     console.error("Gemini API Error:", error);
     throw error;
+  }
+};
+
+export const generateAwards = async (
+  players: Player[], 
+  scenarios: Scenarios, 
+  winnerName: string
+): Promise<Record<string, Award>> => {
+  try {
+    const prompt = `
+      The game "It By Ear" has just ended.
+      Scenario A was: "${scenarios.scenarioA}".
+      Scenario B was: "${scenarios.scenarioB}".
+      The Winner was: ${winnerName}.
+
+      Players:
+      ${players.map(p => `- ${p.name} (Role: ${p.role})`).join('\n')}
+
+      Generate a funny, sarcastic, or congratulatory "Award" for EACH player based on their role and the scenarios.
+      The award should have a 'title' (max 5 words), a 'description' (max 1 sentence), and a relevant 'emoji'.
+      
+      Return a JSON object where keys are the Player IDs and values are the award objects.
+    `;
+    
+    const awardSchema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        awards: {
+          type: Type.ARRAY,
+          items: {
+             type: Type.OBJECT,
+             properties: {
+                playerId: { type: Type.STRING },
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                emoji: { type: Type.STRING }
+             }
+          }
+        }
+      }
+    };
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: awardSchema
+      },
+    });
+
+    const text = response.text;
+    if (!text) return {};
+
+    const data = JSON.parse(text);
+    const resultMap: Record<string, Award> = {};
+    
+    // Map array back to object keyed by ID for easier lookup
+    // We have to map manually because we can't enforce dynamic keys in schema easily with player IDs that vary
+    // So we asked for an array of objects with playerId inside
+    if (data.awards) {
+        data.awards.forEach((item: any) => {
+            // Find correct ID by matching name or assuming the model followed instructions order.
+            // Ideally the model outputs the ID we passed in.
+            // We'll pass the list of players to the prompt so it knows the mapping.
+            // Let's rely on the model returning the IDs we provide in the text context implicitly?
+            // Actually, better to pass the IDs in the prompt text explicitly.
+        });
+    }
+    
+    // Correction: To ensure ID matching, let's just parse the JSON array and map it.
+    // We will assume the model uses the Names to generate, but we need to link back to IDs.
+    // Let's try a different schema structure that is safer.
+    
+    // Simplified approach: Just ask for an array of awards in the same order as the players list provided.
+    const simplePrompt = `
+      Players List (in order):
+      ${players.map(p => p.name).join(', ')}
+
+      Scenarios: ${scenarios.scenarioA} vs ${scenarios.scenarioB}.
+      Winner: ${winnerName}.
+
+      Generate a JSON list of awards, one for each player IN THE SAME ORDER as listed above.
+    `;
+    
+    const listSchema: Schema = {
+        type: Type.ARRAY,
+        items: {
+            type: Type.OBJECT,
+            properties: {
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                emoji: { type: Type.STRING }
+            }
+        }
+    };
+
+     const listResponse = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: simplePrompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: listSchema
+      },
+    });
+
+    const listData = JSON.parse(listResponse.text || "[]");
+    
+    players.forEach((p, index) => {
+        if (listData[index]) {
+            resultMap[p.id] = listData[index];
+        } else {
+            resultMap[p.id] = { title: "Participation Award", description: "You were definitely there.", emoji: "😐" };
+        }
+    });
+
+    return resultMap;
+
+  } catch (error) {
+    console.error("Award Generation Error:", error);
+    return {};
   }
 };

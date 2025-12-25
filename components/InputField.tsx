@@ -7,30 +7,28 @@ interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
 
 export const InputField: React.FC<InputFieldProps> = ({ label, error, className = '', ...props }) => {
   return (
-    <div className={`flex flex-col gap-1 ${className}`}>
-      <div className="relative">
-        <input
-          className={`
-            peer w-full h-14 px-4 pt-5 pb-2 rounded-t-lg border-b-2 bg-m3-surfaceVariant/50 
-            text-m3-onSurface focus:outline-none focus:bg-m3-surfaceVariant 
-            placeholder-shown:pt-2
-            ${error ? 'border-m3-error' : 'border-m3-outline focus:border-m3-primary'}
-          `}
-          placeholder=" "
-          {...props}
-        />
-        <label 
-          className={`
-            absolute left-4 top-4 text-m3-onSurfaceVariant/80 text-base duration-200 transform -translate-y-3 scale-75 origin-[0] 
-            peer-placeholder-shown:scale-100 peer-placeholder-shown:translate-y-0 
-            peer-focus:scale-75 peer-focus:-translate-y-3 pointer-events-none
-            ${error ? 'text-m3-error' : ''}
-          `}
-        >
-          {label}
-        </label>
-      </div>
-      {error && <span className="text-xs text-m3-error px-4">{error}</span>}
+    <div className={`flex flex-col gap-2 w-full ${className}`}>
+      <label className="text-xs font-black uppercase tracking-widest text-brand-darkBlue ml-1">
+        {label}
+      </label>
+      
+      <input
+        className={`
+          w-full h-14 px-4 rounded-lg bg-white
+          border-2 text-brand-darkBlue font-bold text-lg
+          placeholder:text-brand-navy/30
+          focus:outline-none focus:shadow-hard focus:-translate-y-1 transition-all duration-200
+          ${error ? 'border-brand-red' : 'border-brand-darkBlue focus:border-brand-teal'}
+        `}
+        placeholder=" "
+        {...props}
+      />
+      
+      {error && (
+        <span className="text-xs font-bold text-brand-red px-1 bg-brand-red/10 py-1 rounded w-fit">
+          ! {error}
+        </span>
+      )}
     </div>
   );
 };
