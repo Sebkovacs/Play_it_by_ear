@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Game History Collection
+    match /game_history/{gameId} {
+      // Anyone can read the history (needed for the Landing page global stats)
+      allow read: if true;
+      
+      // Anyone can create a new history entry if the data matches the schema
+      allow create: if request.resource.data.keys().hasAll(['topic', 'winner', 'timestamp'])
+                    && request.resource.data.topic is string
+                    && request.resource.data.winner is string
+                    && request.resource.data.timestamp is number;
+      
+      // No one can edit or delete history once written
+      allow update, delete: if false;
+    }
+  }
+}
