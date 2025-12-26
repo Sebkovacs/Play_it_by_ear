@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { GamePhase, GameState, Player, PlayerRole, NetworkMessage, RoundHistory, UserStats, Award } from './types';
-import { generateGameScenarios, generateAwards } from './services/geminiService';
+import { GamePhase, GameState, Player, PlayerRole, NetworkMessage, UserStats, GameMode, GameResult, VoteSubmission, RoundHistory } from './types';
+import { generateGameScenarios, generateEndGameAwards, generatePersona } from './services/geminiService';
 import { p2p } from './services/p2pService';
-import { saveGameToHistory, getGlobalHistory, subscribeToAuthChanges, logout, saveUserAward, getUserAwards } from './services/firebase';
+import { saveGameToHistory, subscribeToAuthChanges, logout, saveUserAward, getUserAwards } from './services/firebase';
 import { Navbar } from './components/Navbar';
 import { Modal } from './components/Modal';
 import { Button } from './components/Button';
@@ -14,6 +15,9 @@ import { GeneratingView } from './components/views/GeneratingView';
 import { RevealView } from './components/views/RevealView';
 import { GameView } from './components/views/GameView';
 import { ResultView } from './components/views/ResultView';
+import { VotingView } from './components/views/VotingView';
+import { ProfileView } from './components/views/ProfileView';
+import { PublicProfileView } from './components/views/PublicProfileView';
 
 const App: React.FC = () => {
   // Identity
@@ -25,6 +29,9 @@ const App: React.FC = () => {
   const [joinCode, setJoinCode] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userId, setUserId] = useState<string>('');
+  
+  // UI State
+  const [viewingPlayer, setViewingPlayer] = useState<Player | null>(null);
   
   // Game State
   const [gameState, setGameState] = useState<GameState>({
@@ -38,13 +45,17 @@ const App: React.FC = () => {
     history: [],
     lastResult: null,
     guesserId: null,
+    starterId: null,
     currentRound: 1,
-    totalRounds: 3,
+    targetValue: 3, // Default 3 rounds
+    gameMode: GameMode.ROUNDS,
     maxToneDeaf: 1,
-    scores: {}
+    scores: {},
+    accumulatedDescriptors: {},
+    accumulatedReasons: {},
+    endGameAwards: null
   });
 
-  const [globalHistory, setGlobalHistory] = useState<RoundHistory[]>([]);
   const [topicInput, setTopicInput] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -100,15 +111,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Fetch Global History on mount
-  useEffect(() => {
-    const fetchHistory = async () => {
-        const history = await getGlobalHistory();
-        setGlobalHistory(history);
-    };
-    fetchHistory();
-  }, []);
-
   // Cleanup P2P on unmount
   useEffect(() => {
     return () => { p2p.destroy(); };
@@ -128,19 +130,18 @@ const App: React.FC = () => {
   
   const handleLogout = async () => {
       await logout();
+      setIsLoggedIn(false);
       setMyName('');
+      setUserId('');
+      setMyAwards([]);
       localStorage.removeItem('ibe_name');
       setGameState(prev => ({ ...prev, phase: GamePhase.LANDING }));
   };
   
   const getPlayerTitle = (stats: UserStats) => {
-      if (stats.gamesPlayed === 0) return "Intern";
-      if (stats.gamesPlayed < 5) return "Junior Associate";
-      if (stats.gamesPlayed < 10) return "Senior Associate";
-      const winRate = stats.gamesPlayed > 0 ? stats.wins / stats.gamesPlayed : 0;
-      if (winRate > 0.5 && stats.gamesPlayed >= 10) return "CEO";
-      if (stats.gamesPlayed >= 20) return "Partner";
-      return "Executive";
+      if (stats.personaTitle) return stats.personaTitle;
+      if (stats.gamesPlayed === 0) return "Fresh Meat";
+      return "The Unknown";
   };
 
 
@@ -189,34 +190,33 @@ const App: React.FC = () => {
   const handleIncomingMessage = (msg: NetworkMessage, senderPeerId: string) => {
     if (msg.type === 'STATE_UPDATE') {
        if (!stateRef.current.players.find(p => p.id === myPlayerId)?.isHost) {
-          // If we receive a result that has awards, check if we need to save ours
           const currentState = stateRef.current;
           const nextState = msg.payload;
 
-          if (nextState.phase === GamePhase.RESULT && currentState.phase !== GamePhase.RESULT) {
-              updateStatsOnGameEnd(nextState);
-              // Save award if logged in
-              if (userId && nextState.lastResult?.awards) {
-                  const myAward = nextState.lastResult.awards[myPlayerId];
-                  if (myAward) {
-                      saveUserAward(userId, myAward, nextState.scenarios?.topic || "Unknown");
-                      // Optimistically update local state
-                      setMyAwards(prev => [{...myAward, topic: nextState.scenarios?.topic, timestamp: Date.now()}, ...prev]);
-                  }
-              }
+          // Check if game just ended with new awards
+          if ((nextState.phase === GamePhase.GAME_OVER) && currentState.phase !== GamePhase.GAME_OVER) {
+               handleGameOverSync(nextState);
           }
+          
+          if (nextState.phase === GamePhase.RESULT && currentState.phase !== GamePhase.RESULT) {
+              updateStatsOnRoundEnd(nextState);
+          }
+
           setGameState({...nextState, error: null}); 
        }
     } else if (msg.type === 'JOIN_REQUEST') {
-       const { name, id } = msg.payload;
+       const { name, id, stats, uid } = msg.payload; // Stats and UID added
        const realPeerId = senderPeerId || msg.payload.peerId;
        setGameState(prev => {
          const exists = prev.players.find(p => p.id === id);
          if (exists) return prev;
          const newPlayer: Player = {
-           id, peerId: realPeerId, name, role: PlayerRole.PENDING, isHost: false, hasViewed: false, isReady: false, topicSuggestion: ''
+           id, peerId: realPeerId, name, role: PlayerRole.PENDING, isHost: false, hasViewed: false, isReady: false, topicSuggestion: '', hasVoted: false,
+           stats: stats, // Store public stats
+           uid: uid
          };
-         const newState = { ...prev, players: [...prev.players, newPlayer] };
+         const newScores = { ...prev.scores, [id]: 10 };
+         const newState = { ...prev, players: [...prev.players, newPlayer], scores: newScores };
          broadcastState(newState);
          return newState;
        });
@@ -249,10 +249,10 @@ const App: React.FC = () => {
           broadcastState(newState);
           return newState;
        });
-    } else if (msg.type === 'NEXT_ROUND') {
-        setTopicInput('');
+    } else if (msg.type === 'SUBMIT_VOTES') {
+        if(isHost) handleVoteAggregation(msg.payload, msg.senderId);
     } else if (msg.type === 'RESET_GAME') {
-        setGameState(prev => ({ ...prev, phase: GamePhase.LOBBY, scenarios: null, revealedPlayers: [], countdown: null, players: prev.players.map(p => ({...p, role: PlayerRole.PENDING, hasViewed: false, isReady: false, topicSuggestion: ''})), lastResult: null, guesserId: null, currentRound: 1, scores: {} }));
+        setGameState(prev => ({ ...prev, phase: GamePhase.LOBBY, scenarios: null, revealedPlayers: [], countdown: null, players: prev.players.map(p => ({...p, role: PlayerRole.PENDING, hasViewed: false, isReady: false, topicSuggestion: '', hasVoted: false})), lastResult: null, guesserId: null, starterId: null, currentRound: 1, scores: {}, targetValue: 3 }));
         setTopicInput('');
     }
   };
@@ -294,8 +294,26 @@ const App: React.FC = () => {
           (conn) => { conn.send({ type: 'STATE_UPDATE', payload: stateRef.current }); },
           handlePeerDisconnect
       );
-      const hostPlayer: Player = { id: myId, peerId: 'HOST', name: myName.trim(), role: PlayerRole.PENDING, isHost: true, hasViewed: false, isReady: false, topicSuggestion: '' };
-      const newState = { phase: GamePhase.LOBBY, players: [hostPlayer], scenarios: null, error: null, roomCode: code, revealedPlayers: [], countdown: null, history: [], lastResult: null, guesserId: null, currentRound: 1, totalRounds: 3, maxToneDeaf: 1, scores: { [myId]: 0 } };
+      const hostPlayer: Player = { 
+          id: myId, 
+          peerId: 'HOST', 
+          name: myName.trim(), 
+          role: PlayerRole.PENDING, 
+          isHost: true, 
+          hasViewed: false, 
+          isReady: false, 
+          topicSuggestion: '', 
+          hasVoted: false,
+          stats: {
+              wins: userStats.wins,
+              gamesPlayed: userStats.gamesPlayed,
+              title: getPlayerTitle(userStats),
+              description: userStats.personaDescription || ""
+          },
+          uid: userId
+      };
+      // Host starts with 10 pts
+      const newState: GameState = { phase: GamePhase.LOBBY, players: [hostPlayer], scenarios: null, error: null, roomCode: code, revealedPlayers: [], countdown: null, history: [], lastResult: null, guesserId: null, starterId: null, currentRound: 1, targetValue: 3, gameMode: GameMode.ROUNDS, maxToneDeaf: 1, scores: { [myId]: 10 }, accumulatedDescriptors: {}, accumulatedReasons: {}, endGameAwards: null };
       setGameState(newState);
     } catch (e: any) {
        setGameState(prev => ({...prev, error: "Could not create room: " + e.message}));
@@ -311,10 +329,44 @@ const App: React.FC = () => {
     setGameState(prev => ({...prev, phase: GamePhase.LOBBY})); 
     try {
       await p2p.join(joinCode, handleIncomingMessage);
-      p2p.broadcast({ type: 'JOIN_REQUEST', payload: { name: myName.trim(), id: myId, peerId: 'CLIENT' } });
+      p2p.broadcast({ 
+          type: 'JOIN_REQUEST', 
+          payload: { 
+              name: myName.trim(), 
+              id: myId, 
+              peerId: 'CLIENT',
+              stats: {
+                  wins: userStats.wins,
+                  gamesPlayed: userStats.gamesPlayed,
+                  title: getPlayerTitle(userStats),
+                  description: userStats.personaDescription || ""
+              },
+              uid: userId
+          } 
+      });
     } catch (e: any) {
       setGameState(prev => ({ ...prev, phase: GamePhase.LANDING, error: "Could not join: " + e.message + ". Check the code." }));
     }
+  };
+
+  // --- DEV: TEST MODE INJECTOR ---
+  const handleTestMode = () => {
+    const fakeBots: Player[] = [
+      { id: 'bot-1', peerId: 'bot-1', name: 'Bot Alice', role: PlayerRole.PENDING, isHost: false, hasViewed: true, isReady: true, topicSuggestion: 'Office Politics', hasVoted: false, stats: { wins: 5, gamesPlayed: 20, title: "The Average", description: "Boring." } },
+      { id: 'bot-2', peerId: 'bot-2', name: 'Bot Bob', role: PlayerRole.PENDING, isHost: false, hasViewed: true, isReady: true, topicSuggestion: 'First Date', hasVoted: false, stats: { wins: 99, gamesPlayed: 100, title: "The Shark", description: "Dangerous." } },
+      { id: 'bot-3', peerId: 'bot-3', name: 'Bot Charlie', role: PlayerRole.PENDING, isHost: false, hasViewed: true, isReady: true, topicSuggestion: 'Cooking Show', hasVoted: false, stats: { wins: 0, gamesPlayed: 1, title: "The Noob", description: "Fresh meat." } },
+    ];
+    setGameState(prev => {
+      const newScores = { ...prev.scores };
+      fakeBots.forEach(b => newScores[b.id] = 10);
+      const newState = {
+         ...prev,
+         players: [...prev.players, ...fakeBots],
+         scores: newScores
+      };
+      broadcastState(newState); 
+      return newState;
+    });
   };
 
   const toggleReady = () => {
@@ -347,7 +399,7 @@ const App: React.FC = () => {
   const startGame = async () => {
     if (!isHost) return;
     if (gameState.players.length < 3) {
-      setGameState(prev => ({ ...prev, error: "Game designed for 4-8 players. (Min 3 to force start)" }));
+      setGameState(prev => ({ ...prev, error: "Minimum 3 players needed for chaos." }));
       return;
     }
     setGameState(prev => { const next = { ...prev, phase: GamePhase.GENERATING, error: null }; broadcastState(next); return next; });
@@ -357,7 +409,15 @@ const App: React.FC = () => {
       const scenarios = await generateGameScenarios(chosenTopic);
       const players = [...gameState.players];
       const scores = { ...gameState.scores };
-      players.forEach(p => { if (scores[p.id] === undefined) scores[p.id] = 0; });
+      
+      // Ensure everyone has 10 points if they are new or if round 1
+      players.forEach(p => { 
+        if (scores[p.id] === undefined) {
+            scores[p.id] = 10; 
+        }
+        // Reset per-round states
+        p.hasVoted = false; 
+      });
 
       // Role Assignment
       const playerCount = players.length;
@@ -374,7 +434,10 @@ const App: React.FC = () => {
           else players[remainingIndices[i]].role = PlayerRole.SCENARIO_B;
       }
 
-      const newState = { ...gameState, phase: GamePhase.REVEAL, players, scores, scenarios, error: null, revealedPlayers: [], countdown: null, lastResult: null, guesserId: null };
+      // Select Meeting Starter (Random)
+      const starter = players[Math.floor(Math.random() * players.length)];
+
+      const newState = { ...gameState, phase: GamePhase.REVEAL, players, scores, scenarios, error: null, revealedPlayers: [], countdown: null, lastResult: null, guesserId: null, starterId: starter.id };
       setGameState(newState);
       broadcastState(newState);
     } catch (e: any) {
@@ -386,7 +449,7 @@ const App: React.FC = () => {
 
   const markAsReady = () => setGameState(prev => ({...prev, phase: GamePhase.PLAYING}));
 
-  const updateStatsOnGameEnd = (state: GameState) => {
+  const updateStatsOnRoundEnd = (state: GameState) => {
       const result = state.lastResult;
       const me = state.players.find(p => p.id === myPlayerId);
       if (!result || !me) return;
@@ -398,7 +461,25 @@ const App: React.FC = () => {
       } else {
           if (guesser && me.role !== guesser.role && me.id !== guesser.id) iWon = true;
       }
-      saveUserStats({ gamesPlayed: userStats.gamesPlayed + 1, wins: iWon ? userStats.wins + 1 : userStats.wins });
+      saveUserStats({ ...userStats, gamesPlayed: userStats.gamesPlayed + 1, wins: iWon ? userStats.wins + 1 : userStats.wins });
+  };
+  
+  const handleGameOverSync = async (nextState: GameState) => {
+      // Save award if logged in
+      if (userId && nextState.endGameAwards) {
+          const myAward = nextState.endGameAwards[myPlayerId];
+          if (myAward) {
+              await saveUserAward(userId, myAward, "It By Ear Season");
+              setMyAwards(prev => [{...myAward, topic: "End Game", timestamp: Date.now()}, ...prev]);
+              
+              // Generate persistent persona if we have enough data (lazy trigger)
+              const newPersona = await generatePersona(userStats, myAwards);
+              if (newPersona) {
+                  const newStats = { ...userStats, personaTitle: newPersona.title, personaDescription: newPersona.description };
+                  saveUserStats(newStats);
+              }
+          }
+      }
   };
 
   const initiateGuess = () => {
@@ -428,6 +509,11 @@ const App: React.FC = () => {
   const handleGuessVerification = async (guesses: Record<string, PlayerRole>, guesserId: string) => {
       const players = stateRef.current.players;
       const scores = { ...stateRef.current.scores };
+      const pointDeltas: Record<string, number> = {};
+      
+      scores[guesserId] = (scores[guesserId] || 10) - 2;
+      pointDeltas[guesserId] = -2;
+
       let allCorrect = true;
       players.filter(p => p.id !== guesserId).forEach(p => {
          const guessedRole = guesses[p.id];
@@ -439,66 +525,186 @@ const App: React.FC = () => {
       
       if (allCorrect) {
           winner = guesser?.name || "Guesser";
-          reason = "Accusation was 100% Correct!";
-          if (guesser) scores[guesser.id] = (scores[guesser.id] || 0) + 200;
-          players.forEach(p => { if (p.id !== guesserId && guesser && p.role === guesser.role && p.role !== PlayerRole.TONE_DEAF) scores[p.id] = (scores[p.id] || 0) + 100; });
+          reason = "Accusation Verified. Scum removed.";
+          scores[guesserId] = (scores[guesserId] || 0) + 5;
+          pointDeltas[guesserId] = (pointDeltas[guesserId] || 0) + 5;
+          players.forEach(p => { 
+             const isTeammate = p.id !== guesserId && guesser && p.role === guesser.role && p.role !== PlayerRole.TONE_DEAF;
+             if (isTeammate) {
+                 scores[p.id] = (scores[p.id] || 10) + 1; 
+                 pointDeltas[p.id] = 1;
+             }
+          });
       } else {
-          winner = "Opponents";
-          reason = `${guesser?.name} guessed wrong!`;
-          if (guesser) scores[guesser.id] = (scores[guesser.id] || 0) - 100;
-          players.forEach(p => { if (p.id !== guesserId && guesser && p.role !== guesser.role) scores[p.id] = (scores[p.id] || 0) + 50; });
+          winner = "The Resistance";
+          reason = `${guesser?.name} is a loud wrong person.`;
+          players.forEach(p => { 
+             const isTeammate = p.id !== guesserId && guesser && p.role === guesser.role && p.role !== PlayerRole.TONE_DEAF;
+             if (isTeammate) {
+                 scores[p.id] = (scores[p.id] || 10) - 1; 
+                 pointDeltas[p.id] = -1;
+             }
+          });
+          players.forEach(p => { 
+              const isOpponent = p.id !== guesserId && guesser && p.role !== guesser.role;
+              if (isOpponent) {
+                  scores[p.id] = (scores[p.id] || 10) + 1; 
+                  pointDeltas[p.id] = 1;
+              }
+          });
       }
 
-      const scenarios = stateRef.current.scenarios;
-      let awards = {};
-      
-      // Generate Awards (Host side only)
-      if (scenarios) {
-          awards = await generateAwards(players, scenarios, winner);
-      }
-      
-      // Save Host's award locally if logged in
-      if (userId && awards && (awards as any)[myPlayerId]) {
-          const myAward = (awards as any)[myPlayerId];
-          saveUserAward(userId, myAward, scenarios?.topic || "Unknown");
-          setMyAwards(prev => [{...myAward, topic: scenarios?.topic, timestamp: Date.now()}, ...prev]);
-      }
-
-      const result = { winner, reason, guesserName: guesser?.name, wasCorrect: allCorrect, awards };
+      const result: GameResult = { winner, reason, guesserName: guesser?.name, wasCorrect: allCorrect, awards: {}, pointDeltas };
       const newHistory: RoundHistory = { id: Date.now().toString(), topic: stateRef.current.scenarios?.topic || "Unknown Topic", winner: allCorrect ? (guesser?.name + "'s Team") : "Opposition", timestamp: Date.now() };
       saveGameToHistory(newHistory);
-      const newState = { ...stateRef.current, phase: GamePhase.RESULT, lastResult: result, history: [newHistory, ...stateRef.current.history], scores, guesserId: null, revealedPlayers: players.map(p => p.id) };
+      
+      const newState = { 
+          ...stateRef.current, 
+          phase: GamePhase.RESULT, 
+          lastResult: result, 
+          history: [newHistory, ...stateRef.current.history], 
+          scores, 
+          guesserId: null, 
+          revealedPlayers: players.map(p => p.id),
+          players: players.map(p => ({...p, hasVoted: false})) // Reset voting status
+      };
       setGameState(newState);
       broadcastState(newState);
-      updateStatsOnGameEnd(newState);
+      updateStatsOnRoundEnd(newState);
   };
   
-  const handleNextRound = () => {
+  // --- VOTING LOGIC ---
+
+  const startVibeCheck = () => {
+      if(!isHost) return;
+      const newState = { ...gameState, phase: GamePhase.VOTING };
+      setGameState(newState);
+      broadcastState(newState);
+  };
+
+  const submitVotes = (votes: VoteSubmission) => {
+      if(isHost) {
+          handleVoteAggregation(votes, myPlayerId);
+      } else {
+          p2p.broadcast({ type: 'SUBMIT_VOTES', payload: votes, senderId: myPlayerId });
+      }
+  };
+
+  const handleVoteAggregation = (votes: VoteSubmission, senderId?: string) => {
+      if(!senderId) return;
+      
+      setGameState(prev => {
+          const newDesc = { ...prev.accumulatedDescriptors };
+          const newReason = { ...prev.accumulatedReasons };
+          
+          // Add descriptors
+          Object.keys(votes.descriptors).forEach(targetId => {
+              if(!newDesc[targetId]) newDesc[targetId] = [];
+              newDesc[targetId].push(votes.descriptors[targetId]);
+          });
+
+          // Add reasons (Best/Worst)
+          if(votes.bestPlayerId) {
+             if(!newReason[votes.bestPlayerId]) newReason[votes.bestPlayerId] = [];
+             newReason[votes.bestPlayerId].push(`Voted BEST: ${votes.bestReason}`);
+          }
+          if(votes.worstPlayerId) {
+             if(!newReason[votes.worstPlayerId]) newReason[votes.worstPlayerId] = [];
+             newReason[votes.worstPlayerId].push(`Voted WORST: ${votes.worstReason}`);
+          }
+
+          const newPlayers = prev.players.map(p => p.id === senderId ? { ...p, hasVoted: true } : p);
+          
+          const newState = { 
+              ...prev, 
+              players: newPlayers, 
+              accumulatedDescriptors: newDesc, 
+              accumulatedReasons: newReason 
+          };
+          
+          // Host sees local update immediately
+          // Note: We don't broadcast every single vote to avoid spam, but we broadcast the 'hasVoted' status
+          if (isHost) broadcastState(newState);
+          return newState;
+      });
+  };
+
+  const handleNextRound = async () => {
       if (!isHost) return;
-      if (gameState.currentRound >= gameState.totalRounds) { handleReset(); return; }
+
+      let isGameOver = false;
+      if (gameState.gameMode === GameMode.ROUNDS) {
+          if (gameState.currentRound >= gameState.targetValue) isGameOver = true;
+      } else {
+          const highestScore = Math.max(...(Object.values(gameState.scores) as number[]));
+          if (highestScore >= gameState.targetValue) isGameOver = true;
+      }
+
+      if (isGameOver) {
+          // GENERATE FINAL AWARDS
+          const awards = await generateEndGameAwards(gameState.players, gameState.accumulatedDescriptors, gameState.accumulatedReasons);
+          const newState = { ...gameState, phase: GamePhase.GAME_OVER, endGameAwards: awards };
+          setGameState(newState);
+          broadcastState(newState);
+          handleGameOverSync(newState);
+          return; 
+      }
+
       const nextRound = gameState.currentRound + 1;
       setTopicInput(''); 
-      setGameState(prev => ({ ...prev, currentRound: nextRound }));
-      setGameState(prev => { const next = { ...prev, phase: GamePhase.GENERATING, currentRound: nextRound, error: null }; broadcastState(next); return next; });
+      const loadingState = { ...gameState, phase: GamePhase.GENERATING, currentRound: nextRound, error: null };
+      setGameState(loadingState);
+      broadcastState(loadingState);
       setTimeout(() => startGame(), 500); 
   };
 
   const handleReset = () => {
       if(!isHost) return;
-      const newState = { ...gameState, phase: GamePhase.LOBBY, scenarios: null, revealedPlayers: [], countdown: null, players: gameState.players.map(p => ({...p, role: PlayerRole.PENDING, hasViewed: false, isReady: false, topicSuggestion: ''})), lastResult: null, guesserId: null, currentRound: 1, scores: {} };
+      const resetScores: Record<string, number> = {};
+      gameState.players.forEach(p => resetScores[p.id] = 10);
+      
+      const newState: GameState = { 
+          ...gameState, 
+          phase: GamePhase.LOBBY, 
+          scenarios: null, 
+          revealedPlayers: [], 
+          countdown: null, 
+          players: gameState.players.map(p => ({...p, role: PlayerRole.PENDING, hasViewed: false, isReady: false, topicSuggestion: '', hasVoted: false})), 
+          lastResult: null, 
+          guesserId: null, 
+          starterId: null, 
+          currentRound: 1, 
+          scores: resetScores,
+          accumulatedDescriptors: {},
+          accumulatedReasons: {},
+          endGameAwards: null
+      };
       setGameState(newState);
       broadcastState(newState);
       setTopicInput('');
   };
   
-  const updateSettings = (rounds: number, toneDeaf: number) => {
-      setGameState(prev => { const newState = { ...prev, totalRounds: rounds, maxToneDeaf: toneDeaf }; broadcastState(newState); return newState; });
+  const updateSettings = (target: number, toneDeaf: number, mode: GameMode) => {
+      setGameState(prev => { 
+          const newState = { ...prev, targetValue: target, maxToneDeaf: toneDeaf, gameMode: mode }; 
+          broadcastState(newState); 
+          return newState; 
+      });
   };
   
   const copyLink = () => {
       const url = `${window.location.origin}${window.location.pathname}?code=${gameState.roomCode}`;
       navigator.clipboard.writeText(url);
-      alert("Link copied to clipboard!");
+      alert("Link copied! Spread the virus.");
+  };
+
+  const handleSelectPlayer = (player: Player) => {
+      // Don't view yourself as 'other', use the main stats modal
+      if (player.id === myPlayerId) {
+          setShowStats(true);
+      } else {
+          setViewingPlayer(player);
+      }
   };
 
   const renderContent = () => {
@@ -508,18 +714,17 @@ const App: React.FC = () => {
                   myName={myName} setMyName={setMyName} 
                   joinCode={joinCode} setJoinCode={setJoinCode}
                   onCreateGame={createGame} onJoinGame={joinGame}
-                  globalHistory={globalHistory} error={gameState.error}
+                  error={gameState.error}
                   isLoggedIn={isLoggedIn}
-                  onManualLogin={() => {
-                     setMyName(prev => prev || "Guest");
-                     setIsLoggedIn(true);
-                  }}
+                  onManualLogin={() => { setMyName(prev => prev || "Guest"); setIsLoggedIn(true); }}
                />;
       case GamePhase.LOBBY:
         return <LobbyView 
                   gameState={gameState} myPlayerId={myPlayerId} isHost={isHost}
                   onCopyLink={copyLink} onToggleReady={toggleReady} onUpdateSettings={updateSettings}
                   topicInput={topicInput} setTopicInput={setTopicInput} onSubmitTopic={submitTopic}
+                  onTestMode={handleTestMode}
+                  onSelectPlayer={handleSelectPlayer}
                />;
       case GamePhase.GENERATING:
         return <GeneratingView round={gameState.currentRound} />;
@@ -532,13 +737,27 @@ const App: React.FC = () => {
                   onInitiateGuess={initiateGuess} onCancelGuess={cancelGuess} onSubmitGuess={submitGuess}
                />;
       case GamePhase.RESULT:
-        return <ResultView gameState={gameState} isHost={isHost} onNextRound={handleNextRound} onReset={handleReset} />;
+        return <ResultView 
+                  gameState={gameState} isHost={isHost} onStartVibeCheck={startVibeCheck} 
+                  onSelectPlayer={handleSelectPlayer}
+               />;
+      case GamePhase.VOTING:
+        return <VotingView 
+                  gameState={gameState} myPlayerId={myPlayerId} isHost={isHost} 
+                  onSubmitVotes={submitVotes} onHostNext={handleNextRound} 
+               />;
+      case GamePhase.GAME_OVER:
+        // Reuse ResultView but with special props or just let it read endGameAwards
+        return <ResultView 
+                  gameState={gameState} isHost={isHost} onStartVibeCheck={() => {}} onReset={handleReset} 
+                  isGameOver={true} onSelectPlayer={handleSelectPlayer} 
+               />;
       default:
         return (
           <div className="flex-1 flex items-center justify-center p-8 text-center flex-col gap-4">
-            <h2 className="text-xl text-brand-orange font-bold">Something went wrong</h2>
+            <h2 className="text-xl text-brand-orange font-bold">System Failure</h2>
             <p className="text-brand-navy">{gameState.error}</p>
-            <Button onClick={() => setGameState(prev => ({...prev, phase: GamePhase.LANDING, error: null}))}>Back to Home</Button>
+            <Button onClick={() => setGameState(prev => ({...prev, phase: GamePhase.LANDING, error: null}))}>Eject</Button>
           </div>
         );
     }
@@ -554,84 +773,45 @@ const App: React.FC = () => {
           onShowHelp={() => setShowHelp(true)}
           playerTitle={getPlayerTitle(userStats)}
           minimal={gameState.phase === GamePhase.LANDING}
+          players={gameState.players}
+          scores={gameState.scores}
       />
 
-      <Modal isOpen={showHelp} onClose={() => setShowHelp(false)} title="Game Rules">
+      <Modal isOpen={showHelp} onClose={() => setShowHelp(false)} title="Rules of Engagement">
          <div className="space-y-4 text-brand-navy text-sm leading-relaxed">
             <p className="italic text-brand-navy/60 border-l-4 border-brand-teal pl-3">"We don't have a plan, but we have a vibe."</p>
             <div className="space-y-2">
                 <h3 className="font-bold text-brand-darkBlue">1. The Setup</h3>
-                <p>Everyone enters the meeting. Half the room has a <strong>Serious Agenda</strong>. The other half has a <strong>Silly Agenda</strong>.</p>
+                <p>Half the room has a <strong>Serious Scenario</strong>. The other half has an <strong>Absurd Scenario</strong>. There can be 0 to 2 <strong>Tone Deaf</strong> players who know nothing!</p>
             </div>
             <div className="space-y-2">
-                <h3 className="font-bold text-brand-darkBlue">2. The Twist</h3>
-                <p>There might be <strong>Tone Deaf</strong> players. They have no idea what's going on. They just have to fake it.</p>
+                <h3 className="font-bold text-brand-darkBlue">2. The Gameplay</h3>
+                <p>Talk vaguely. Signal your tribe. Lie to the others. Don't let the Tone Deaf player blend in.</p>
             </div>
             <div className="space-y-2">
-                <h3 className="font-bold text-brand-darkBlue">3. The Gameplay</h3>
-                <p>Talk vaguely about the topic. Try to signal your teammates without alerting the enemy.</p>
-            </div>
-            <div className="space-y-2">
-                <h3 className="font-bold text-brand-darkBlue">4. Winning</h3>
-                <p>Hit <strong>"Make Accusation"</strong> if you know who everyone is.</p>
-                <ul className="list-disc pl-5 opacity-80">
-                    <li>Correct Accusation: +200 pts (Guesser), +100 pts (Team).</li>
-                    <li>Wrong Accusation: -100 pts (Guesser), +50 pts (Enemy Team).</li>
-                </ul>
+                <h3 className="font-bold text-brand-darkBlue">3. The Vibe Check</h3>
+                <p>After each round, you must judge your peers. Rate the MVP and the Worst player. Assign tags. These will haunt them forever.</p>
             </div>
          </div>
          <div className="pt-2">
-            <Button fullWidth onClick={() => setShowHelp(false)}>Got it</Button>
+            <Button fullWidth onClick={() => setShowHelp(false)}>Understood</Button>
          </div>
       </Modal>
 
-      <Modal isOpen={showStats} onClose={() => setShowStats(false)} title="Career Profile">
-           <div className="flex flex-col items-center justify-center py-4 space-y-4 w-full">
-               <div className="bg-brand-teal/10 p-4 rounded-full text-brand-darkBlue">
-                   <div className="text-4xl">👔</div>
-               </div>
-               <div className="text-center">
-                   <h2 className="text-2xl font-bold text-brand-darkBlue">{myName || "Guest"}</h2>
-                   <span className="bg-brand-darkBlue text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mt-2 inline-block">
-                       {getPlayerTitle(userStats)}
-                   </span>
-               </div>
-               
-               <div className="grid grid-cols-2 gap-4 w-full mt-4">
-                   <div className="bg-brand-navy/5 p-4 rounded-xl text-center">
-                       <div className="text-3xl font-black text-brand-navy">{userStats.gamesPlayed}</div>
-                       <div className="text-xs uppercase font-bold text-brand-navy/40">Meetings Attended</div>
-                   </div>
-                   <div className="bg-brand-navy/5 p-4 rounded-xl text-center">
-                       <div className="text-3xl font-black text-brand-teal">{userStats.wins}</div>
-                       <div className="text-xs uppercase font-bold text-brand-navy/40">Successful Mergers</div>
-                   </div>
-               </div>
-               
-               <div className="w-full text-center pt-2">
-                   <p className="text-xs text-brand-navy/40">Win Rate: {userStats.gamesPlayed > 0 ? Math.round((userStats.wins / userStats.gamesPlayed) * 100) : 0}%</p>
-               </div>
+      <Modal isOpen={showStats} onClose={() => setShowStats(false)} title="">
+          <ProfileView 
+             userStats={userStats}
+             playerTitle={getPlayerTitle(userStats)}
+             myAwards={myAwards}
+             currentName={myName}
+             onUpdateName={setMyName}
+             onLogout={handleLogout}
+             onClose={() => setShowStats(false)}
+          />
+      </Modal>
 
-               {/* Awards Section */}
-               <div className="w-full pt-4 border-t border-brand-navy/10 mt-2">
-                   <h3 className="text-left font-bold text-brand-navy mb-3 flex items-center gap-2">🏆 Awards Collection</h3>
-                   {myAwards.length === 0 ? (
-                       <p className="text-sm text-brand-navy/50 italic text-center py-4">No awards earned yet. Play a game to win!</p>
-                   ) : (
-                       <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2">
-                           {myAwards.map((award, idx) => (
-                               <div key={idx} className="bg-white border border-brand-navy/10 p-3 rounded-lg flex items-center gap-3">
-                                   <span className="text-2xl">{award.emoji}</span>
-                                   <div className="flex-1">
-                                       <div className="font-bold text-brand-darkBlue text-sm">{award.title}</div>
-                                       <div className="text-xs text-brand-navy/60">{award.description}</div>
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   )}
-               </div>
-           </div>
+      <Modal isOpen={!!viewingPlayer} onClose={() => setViewingPlayer(null)} title="">
+          {viewingPlayer && <PublicProfileView player={viewingPlayer} />}
       </Modal>
 
       {renderContent()}

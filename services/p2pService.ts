@@ -57,6 +57,15 @@ export class P2PService {
       });
 
       this.peer.on('error', (err: any) => {
+        // Suppress common connection drop errors that are auto-handled
+        if (err.type === 'peer-unavailable') {
+             console.log('Peer unavailable:', err);
+             return;
+        }
+        if (err.type === 'network' || err.message?.includes('Lost connection')) {
+             console.log('Network connection unstable. Reconnecting...');
+             return;
+        }
         console.error('Peer error:', err);
         if (this.peer?.disconnected) {
              this.peer.reconnect();
@@ -109,7 +118,12 @@ export class P2PService {
          this.peer?.reconnect();
       });
 
-      this.peer.on('error', (err) => {
+      this.peer.on('error', (err: any) => {
+        // Suppress network errors on client too
+        if (err.type === 'network' || err.message?.includes('Lost connection')) {
+            console.log('Network connection unstable. Reconnecting...');
+            return;
+       }
         console.error('Client Peer error:', err);
         if (this.connections.size === 0) {
              // Optional: decide if we want to fail hard

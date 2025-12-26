@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { GamePhase, GameState, PlayerRole } from '../../types';
+
+import React, { useState, useEffect } from 'react';
+import { GameState, PlayerRole, GameMode } from '../../types';
 import { Button } from '../Button';
-import { Card } from '../Card';
+import { Modal } from '../Modal';
 
 interface GameViewProps {
   gameState: GameState;
@@ -12,103 +13,176 @@ interface GameViewProps {
   isHost: boolean;
 }
 
+// Icons
 const MegaphoneIcon = () => (
-   <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M280-280q-33 0-56.5-23.5T200-360v-240q0-33 23.5-56.5T280-680h320l200-120v640L600-280H280Zm0-80h320l120 72v-484l-120 72H280v340Zm-120 80v-500h-40v500h40Zm560-50q-14-11-23-26.5T684-392q10-18 27-44t17-64q0-38-17-64t-27-44q14-11 23-26.5t9-35.5q38 31 60.5 75t22.5 95q0 51-22.5 95T720-330Z"/></svg>
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M120-320v-160h160l200-200v560L280-320H120Zm424 84L482-300q33-18 53.5-50t20.5-70q0-38-20.5-70T482-540l62-64q45 27 72.5 73.5T644-420q0 58-27.5 104.5T544-236Zm104 104L590-190q60-31 97-89t37-141q0-83-37-141t-97-89l58-58q72 43 115.5 114.5T808-420q0 86-43.5 157.5T648-132Z"/></svg>
 );
-const RefreshIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690v-110h80v280H520v-80h168q-32-56-87.5-88T480-720q-100 0-170 70t-70 170q0 100 70 170t170 70q77 0 139-44t87-116h84q-28 106-114 173t-196 67Z"/></svg>
+const EyeIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M480-320q75 0 127.5-52.5T660-500q0-75-52.5-127.5T480-680q-75 0-127.5 52.5T300-500q0 75 52.5 127.5T480-320Zm0-72q-45 0-76.5-31.5T372-500q0-45 31.5-76.5T480-608q45 0 76.5 31.5T588-500q0 45-31.5 76.5T480-392Zm0 192q-146 0-266-81.5T40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200Z"/></svg>
 );
-const PersonIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-160v-112q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v112H160Zm80-80h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T560-640q0-33-23.5-56.5T480-720q-33 0-56.5 23.5T400-640q0 33 23.5 56.5T480-560Zm0-80Zm0 400Z"/></svg>
-);
-
 
 export const GameView: React.FC<GameViewProps> = ({ 
   gameState, 
   myPlayerId, 
   onInitiateGuess, 
-  onCancelGuess,
-  onSubmitGuess
+  onCancelGuess, 
+  onSubmitGuess 
 }) => {
+  const [showPeek, setShowPeek] = useState(false);
   const [guesses, setGuesses] = useState<Record<string, PlayerRole>>({});
-  const isMyTurnToGuess = gameState.guesserId === myPlayerId;
+  
+  const myPlayer = gameState.players.find(p => p.id === myPlayerId);
   const guesser = gameState.players.find(p => p.id === gameState.guesserId);
+  const isGuesser = gameState.guesserId === myPlayerId;
+  const isGuessingPhase = gameState.phase === 'GUESSING';
+  
+  const myScore = gameState.scores[myPlayerId] || 0;
+  const canAffordGuess = myScore >= 2;
+
+  // Initialize guesses when entering guessing phase
+  useEffect(() => {
+    if (isGuessingPhase && isGuesser) {
+       const initialGuesses: Record<string, PlayerRole> = {};
+       gameState.players.forEach(p => {
+           if (p.id !== myPlayerId) initialGuesses[p.id] = PlayerRole.SCENARIO_A;
+       });
+       setGuesses(initialGuesses);
+    }
+  }, [isGuessingPhase, isGuesser, gameState.players, myPlayerId]);
+
+  const handleRoleSelect = (targetId: string, role: PlayerRole) => {
+      setGuesses(prev => ({ ...prev, [targetId]: role }));
+  };
+
+  const getRoleColor = (role: PlayerRole) => {
+      switch(role) {
+          case PlayerRole.SCENARIO_A: return 'bg-brand-navy text-white';
+          case PlayerRole.SCENARIO_B: return 'bg-brand-orange text-brand-darkBlue';
+          case PlayerRole.TONE_DEAF: return 'bg-brand-yellow text-brand-darkBlue';
+          default: return 'bg-gray-200';
+      }
+  };
+
+  if (!myPlayer) return null;
 
   return (
-    <div className="flex-1 bg-brand-background p-6 flex flex-col items-center justify-center space-y-8 relative">
-        
-        {/* Normal Game View */}
-        <div className="text-center space-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-brand-navy/50">Round {gameState.currentRound}/{gameState.totalRounds}</span>
-          <h1 className="text-4xl font-black text-brand-darkBlue">The Meeting</h1>
-          <p className="text-brand-navy text-lg">Discuss the matter at hand.</p>
-        </div>
-        
-        <div className="w-full max-w-xs aspect-square rounded-full bg-brand-teal/5 flex flex-col items-center justify-center animate-pulse gap-2 border-4 border-brand-teal/20">
-          <span className="text-6xl">👂</span>
-          <span className="text-sm font-medium text-brand-teal">Play It By Ear</span>
-        </div>
+    <div className="flex-1 p-4 pb-24 flex flex-col max-w-lg mx-auto w-full relative">
+      
+      {/* Top Bar: Scores */}
+      <div className="flex items-center justify-between bg-white border-2 border-brand-darkBlue rounded-xl p-3 shadow-hard-sm mb-6">
+           <div className="flex flex-col">
+               <span className="text-[10px] font-black uppercase text-brand-navy/40 tracking-widest">Street Cred</span>
+               <span className={`text-2xl font-black ${myScore < 0 ? 'text-brand-red' : 'text-brand-darkBlue'}`}>{myScore}</span>
+           </div>
+           <div className="h-8 w-[2px] bg-brand-navy/10"></div>
+           <div className="flex flex-col text-right">
+                <span className="text-[10px] font-black uppercase text-brand-navy/40 tracking-widest">
+                    {gameState.gameMode === GameMode.ROUNDS ? "Round" : "Goal"}
+                </span>
+                <span className="text-xl font-bold text-brand-darkBlue">
+                    {gameState.gameMode === GameMode.ROUNDS 
+                        ? `${gameState.currentRound}/${gameState.targetValue}`
+                        : `${gameState.targetValue} pts`
+                    }
+                </span>
+           </div>
+      </div>
 
-        <div className="space-y-4 w-full max-w-md">
-          <p className="text-center text-sm text-brand-navy/50 px-8">
-              Think you know the truth?
-          </p>
-          <Button 
-              fullWidth 
-              onClick={onInitiateGuess}
-              disabled={gameState.phase === GamePhase.GUESSING}
-              className={`h-16 text-xl bg-brand-orange hover:bg-brand-orange/90 text-white shadow-brand-orange/20 shadow-xl`}
-          >
-            <MegaphoneIcon />
-            MAKE AN ACCUSATION
-          </Button>
-        </div>
+      {/* Main Gameplay Area */}
+      {!isGuessingPhase ? (
+          <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-fadeIn">
+              <div className="text-center space-y-4">
+                 <div className="w-24 h-24 bg-brand-teal rounded-full flex items-center justify-center mx-auto border-4 border-brand-darkBlue shadow-hard animate-pulse">
+                    <div className="text-brand-darkBlue"><MegaphoneIcon /></div>
+                 </div>
+                 <h2 className="text-3xl font-black text-brand-darkBlue uppercase tracking-tight">Blend In or Die</h2>
+                 <p className="text-brand-navy font-medium max-w-xs mx-auto">
+                    Discuss the topic vaguely. Lie to your enemies. Don't be weird about it.
+                 </p>
+              </div>
 
-        {/* Guessing Overlay */}
-        {gameState.phase === GamePhase.GUESSING && (
-            <div className="fixed inset-0 z-50 bg-brand-navy/90 backdrop-blur-md flex items-center justify-center p-4">
-                <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto flex flex-col bg-white">
-                    <div className="border-b border-brand-navy/10 pb-4 mb-4 text-center">
-                        <h2 className="text-2xl font-bold text-brand-orange">ACCUSATION IN PROGRESS</h2>
-                        <p className="text-brand-navy/60">{isMyTurnToGuess ? "Identify everyone's role correctly to win." : `${guesser?.name} is making an accusation...`}</p>
-                    </div>
+              <div className="w-full space-y-4">
+                  <Button 
+                    fullWidth 
+                    onClick={onInitiateGuess} 
+                    disabled={!canAffordGuess}
+                    className="h-20 text-xl bg-brand-red text-white border-brand-darkBlue hover:bg-brand-red/90 disabled:bg-gray-300 disabled:text-gray-500"
+                  >
+                      {canAffordGuess ? "ACCUSE SCUM [-2 Pts]" : "Too Poor to Accuse"}
+                  </Button>
+                  <Button variant="outlined" fullWidth onClick={() => setShowPeek(true)} className="gap-2 bg-white hover:bg-brand-teal/10">
+                      <EyeIcon /> What am I doing again?
+                  </Button>
+              </div>
+          </div>
+      ) : (
+          <div className="flex-1 flex flex-col animate-fadeIn">
+              <div className="bg-brand-red text-white p-4 rounded-xl border-2 border-brand-darkBlue shadow-hard mb-6 text-center">
+                  <h3 className="font-black uppercase tracking-widest text-sm mb-1">Snitch in Progress</h3>
+                  <p className="text-lg font-bold">{isGuesser ? "Expose them all!" : `${guesser?.name} is trying to ruin the vibe!`}</p>
+              </div>
 
-                    {isMyTurnToGuess ? (
-                        <div className="space-y-4 flex-1 overflow-y-auto">
-                            {gameState.players.filter(p => p.id !== myPlayerId).map(p => (
-                                <div key={p.id} className="bg-brand-navy/5 p-4 rounded-xl space-y-2">
-                                    <div className="font-bold flex items-center gap-2 text-brand-darkBlue"><PersonIcon/> {p.name}</div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {[PlayerRole.SCENARIO_A, PlayerRole.SCENARIO_B, PlayerRole.TONE_DEAF].map(role => (
-                                            <button
-                                                key={role}
-                                                onClick={() => setGuesses(prev => ({...prev, [p.id]: role}))}
-                                                className={`text-xs p-2 rounded-lg border-2 transition-all font-bold 
-                                                ${guesses[p.id] === role 
-                                                    ? 'border-brand-teal bg-brand-teal text-white' 
-                                                    : 'border-brand-navy/10 text-brand-navy/60 hover:border-brand-teal/50'
-                                                }`}
-                                            >
-                                                {role === PlayerRole.SCENARIO_A ? "Scenario A" : role === PlayerRole.SCENARIO_B ? "Scenario B" : "Tone Deaf"}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                            <div className="pt-4 flex gap-2">
-                                <Button onClick={onCancelGuess} variant="outlined" className="flex-1">Cancel</Button>
-                                <Button onClick={() => onSubmitGuess(guesses)} className="flex-1 bg-brand-orange hover:bg-brand-orange/90 text-white border-0">CONFIRM ACCUSATION</Button>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="py-12 flex flex-col items-center justify-center text-center space-y-4">
-                            <div className="animate-spin text-brand-orange"><RefreshIcon/></div>
-                            <p className="text-brand-navy">Wait while {guesser?.name} decides your fate...</p>
-                        </div>
-                    )}
-                </Card>
-            </div>
-        )}
+              {isGuesser ? (
+                  <div className="space-y-4 mb-8">
+                      {gameState.players.filter(p => p.id !== myPlayerId).map(p => (
+                          <div key={p.id} className="bg-white p-4 rounded-xl border-2 border-brand-darkBlue shadow-hard-sm">
+                              <div className="font-bold text-brand-darkBlue mb-2">{p.name} is...</div>
+                              <div className="grid grid-cols-3 gap-2">
+                                  {[PlayerRole.SCENARIO_A, PlayerRole.SCENARIO_B, PlayerRole.TONE_DEAF].map(role => (
+                                      <button
+                                          key={role}
+                                          onClick={() => handleRoleSelect(p.id, role)}
+                                          className={`p-2 rounded text-[10px] font-black uppercase border-2 transition-all ${guesses[p.id] === role ? 'border-brand-darkBlue shadow-hard-sm scale-105 ' + getRoleColor(role) : 'border-transparent bg-gray-100 text-gray-400'}`}
+                                      >
+                                          {role === PlayerRole.SCENARIO_A ? "Serious" : role === PlayerRole.SCENARIO_B ? "Absurd" : "Imposter"}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+                      ))}
+                      <div className="flex gap-4 pt-4">
+                          <Button variant="text" onClick={onCancelGuess} className="flex-1 text-xs">Nevermind</Button>
+                          <Button onClick={() => onSubmitGuess(guesses)} className="flex-[2] bg-brand-red text-white hover:bg-brand-red/90">Destroy Them</Button>
+                      </div>
+                  </div>
+              ) : (
+                  <div className="flex-1 flex items-center justify-center text-center opacity-50">
+                      <p>Pray they don't pick you...</p>
+                  </div>
+              )}
+          </div>
+      )}
+
+      {/* Peek Modal */}
+      <Modal isOpen={showPeek} onClose={() => setShowPeek(false)} title="Your Cover Story">
+          <div className="space-y-6 text-center">
+              {myPlayer.role === PlayerRole.TONE_DEAF ? (
+                <div className="p-6 bg-brand-yellow/10 rounded-xl border-2 border-dashed border-brand-yellow">
+                  <h3 className="text-xl font-black text-brand-yellow uppercase tracking-widest">Imposter (Tone Deaf)</h3>
+                  <p className="mt-2 text-brand-navy">You have no context. Good luck.</p>
+                </div>
+              ) : (
+                <div className={`p-6 rounded-xl border-2 border-brand-darkBlue ${myPlayer.role === PlayerRole.SCENARIO_A ? 'bg-brand-navy/5' : 'bg-brand-orange/5'}`}>
+                  <h3 className="text-xs font-bold uppercase tracking-wider mb-2 opacity-50">
+                      {myPlayer.role === PlayerRole.SCENARIO_A ? "Serious Team" : "Absurd Team"}
+                  </h3>
+                  <p className="text-lg font-bold text-brand-darkBlue">
+                    {myPlayer.role === PlayerRole.SCENARIO_A ? gameState.scenarios?.scenarioA : gameState.scenarios?.scenarioB}
+                  </p>
+                </div>
+              )}
+              
+              {gameState.starterId === myPlayerId && (
+                   <div className="text-left bg-brand-teal/10 p-3 rounded-lg border border-brand-teal/20">
+                       <span className="text-[10px] font-bold text-brand-teal uppercase tracking-wider">Your Opening Line</span>
+                       <p className="text-brand-darkBlue font-medium italic text-sm">"{gameState.scenarios?.openingQuestion}"</p>
+                   </div>
+              )}
+
+              <Button fullWidth onClick={() => setShowPeek(false)}>Hide Evidence</Button>
+          </div>
+      </Modal>
+
     </div>
   );
 };
