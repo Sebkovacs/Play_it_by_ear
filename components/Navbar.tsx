@@ -10,21 +10,19 @@ interface NavbarProps {
   onShowHelp: () => void;
   playerTitle: string;
   minimal?: boolean;
-  // New props for leaderboard
   players?: Player[];
   scores?: Record<string, number>;
+  isHost?: boolean;
+  onShowSettings?: () => void;
+  onShowGM?: () => void;
 }
 
 const MenuIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" height="28" viewBox="0 -960 960 960" width="28" fill="currentColor"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg>
 );
 
 const UserIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M480-480q-66 0-113-47t-47-113q0-66 47-113t113-47q66 0 113 47t47 113q0 66-47 113t-113 47ZM160-160v-112q0-34 17.5-62.5T224-378q62-31 126-46.5T480-440q66 0 130 15.5T736-378q29 15 46.5 43.5T800-272v112H160Zm80-80h480v-32q0-11-5.5-20T700-306q-54-27-109-40.5T480-360q-56 0-111 13.5T260-306q-9 5-14.5 14t-5.5 20v32Zm240-320q33 0 56.5-23.5T560-640q0-33-23.5-56.5T480-720q-33 0-56.5 23.5T400-640q0 33 23.5 56.5T480-560Zm0-80Zm0 400Z"/></svg>
-);
-
-const HelpIcon = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 -960 960 960" width="20" fill="currentColor"><path d="M478-240q21 0 35.5-14.5T528-290q0-21-14.5-35.5T478-340q-21 0-35.5 14.5T428-290q0 21 14.5 35.5T478-240Zm-36-154h74q0-33 7.5-52t42.5-52q26-26 41-49.5t15-56.5q0-56-41-86t-97-30q-57 0-92.5 30T342-618l66 26q5-27 25-42t48-15q32 0 48.5 17.5T546-590q0 20-14 36t-44 38q-44 42-53 59t-9 53Zm36 314q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
 );
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -36,13 +34,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   playerTitle,
   minimal = false,
   players = [],
-  scores = {}
+  scores = {},
+  isHost = false,
+  onShowSettings,
+  onShowGM
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const navClasses = minimal 
-    ? "fixed top-0 left-0 right-0 h-20 bg-transparent z-50 px-6 flex items-center justify-end"
-    : "fixed top-0 left-0 right-0 h-20 bg-white border-b-2 border-brand-darkBlue z-50 px-6 flex items-center justify-between shadow-sm";
+    ? "fixed top-0 left-0 right-0 h-20 bg-transparent z-50 px-4 flex items-center justify-end"
+    : "fixed top-0 left-0 right-0 h-20 bg-brand-background/90 backdrop-blur-sm border-b-2 border-brand-text/5 z-50 px-4 flex items-center justify-between";
 
   const sortedPlayers = [...players].sort((a,b) => (scores[b.id] || 0) - (scores[a.id] || 0));
 
@@ -50,91 +51,83 @@ export const Navbar: React.FC<NavbarProps> = ({
     <nav className={navClasses}>
       {!minimal && (
         <div className="flex items-center gap-3">
-          {/* Relative path for logo_small.png */}
-          <img src="logo_small.png" alt="Play it by Ear!" className="h-10 w-auto object-contain" onError={(e) => {
-              e.currentTarget.style.display = 'none'; 
-          }}/>
-          <span className="font-black text-brand-darkBlue tracking-tight text-xl hidden sm:block uppercase">Play it by Ear!</span>
+          {/* Logo */}
+          <div className="w-10 h-10 bg-brand-purple rounded-xl border-2 border-brand-text shadow-pop-sm flex items-center justify-center text-white font-display text-xl">
+             Ear
+          </div>
+          <span className="font-display font-bold text-brand-text text-xl hidden sm:block">Play It By Ear</span>
         </div>
       )}
 
-      <div className="flex items-center gap-4">
-        
-        {/* Help Button directly on Navbar in minimal mode (Landing) */}
+      <div className="flex items-center gap-3">
         {minimal && (
-            <button 
-                onClick={onShowHelp}
-                className="flex items-center gap-2 bg-white/50 hover:bg-white px-3 py-2 rounded-lg border-2 border-brand-darkBlue/20 hover:border-brand-darkBlue text-brand-darkBlue font-black text-xs uppercase tracking-wider transition-all backdrop-blur-sm shadow-sm hover:shadow-hard-sm"
-            >
-                <HelpIcon />
-                <span>How to Play</span>
-            </button>
+             <button onClick={onShowHelp} className="px-4 py-2 bg-white rounded-full font-bold text-sm text-brand-text border-2 border-brand-text/10 shadow-sm hover:bg-brand-yellow transition-colors">
+                 How to Play
+             </button>
         )}
 
         {userName && (
              <button 
                 onClick={onShowStats}
-                className="flex items-center gap-3 bg-brand-lime px-4 py-2 rounded-lg border-2 border-brand-darkBlue shadow-hard-sm hover:translate-y-[-2px] hover:shadow-hard transition-all active:translate-y-[0px] active:shadow-hard-sm"
+                className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border-2 border-brand-text shadow-pop-sm hover:translate-y-[-2px] hover:shadow-pop transition-all active:translate-y-[0px] active:shadow-pop-sm"
              >
-                <div className="flex flex-col leading-none text-right">
-                    <span className="font-black text-xs text-brand-darkBlue uppercase tracking-wide">{userName}</span>
-                    <span className="text-[10px] text-brand-darkBlue font-bold opacity-70">{playerTitle}</span>
-                </div>
-                <div className="bg-brand-darkBlue p-1 rounded text-white">
+                <div className="bg-brand-coral p-1.5 rounded-full text-white">
                     <UserIcon />
+                </div>
+                <div className="flex flex-col leading-none text-left pr-2">
+                    <span className="font-bold text-sm text-brand-text">{userName}</span>
+                    <span className="text-[10px] font-bold text-brand-purple uppercase">{playerTitle}</span>
                 </div>
             </button>
         )}
 
-        {/* Menu only appears in non-minimal mode */}
         {!minimal && (
             <div className="relative">
                 <button 
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="p-2 hover:bg-brand-teal rounded-lg transition-colors text-brand-darkBlue border-2 border-brand-darkBlue bg-white shadow-hard-sm active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
-                    title="Menu"
+                    className="w-10 h-10 bg-brand-teal rounded-xl border-2 border-brand-text shadow-pop-sm flex items-center justify-center text-brand-text hover:brightness-110 active:scale-95 transition-all"
                 >
                     <MenuIcon />
                 </button>
 
                 {isMenuOpen && (
-                    <div className="absolute right-0 top-full mt-4 w-64 bg-white rounded-lg shadow-hard border-2 border-brand-darkBlue overflow-hidden py-0 animate-fadeIn z-50">
-                        {/* Live Leaderboard */}
+                    <div className="absolute right-0 top-full mt-4 w-64 bg-white rounded-2xl shadow-pop-lg border-2 border-brand-text overflow-hidden py-2 animate-fadeIn z-50">
                         {sortedPlayers.length > 0 && (
-                            <div className="bg-gray-50 p-4 border-b-2 border-brand-darkBlue">
-                                <h4 className="text-xs font-black uppercase text-brand-navy mb-2 tracking-widest">Current Standings</h4>
+                            <div className="px-4 py-3 border-b-2 border-brand-text/5 bg-brand-background">
+                                <h4 className="text-xs font-bold uppercase text-brand-text/50 mb-2">Leaderboard</h4>
                                 <div className="space-y-1 max-h-32 overflow-y-auto">
                                     {sortedPlayers.map((p, i) => (
-                                        <div key={p.id} className="flex justify-between text-xs font-bold text-brand-darkBlue">
+                                        <div key={p.id} className="flex justify-between text-sm font-bold text-brand-text">
                                             <span>{i+1}. {p.name}</span>
-                                            <span className="text-brand-orange">{scores[p.id] || 0} pts</span>
+                                            <span className="text-brand-purple">{scores[p.id] || 0}</span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                         )}
+                        
+                        {isHost && onShowSettings && (
+                           <button onClick={() => { onShowSettings(); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 hover:bg-brand-yellow font-bold text-brand-text transition-colors">
+                              ⚙️ Game Settings
+                          </button>
+                        )}
+                        
+                        {isHost && onShowGM && (
+                           <button onClick={() => { onShowGM(); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 bg-brand-navy/5 hover:bg-brand-navy/10 text-brand-navy font-bold transition-colors">
+                              🕶️ GM / Secrets
+                          </button>
+                        )}
 
-                        <button 
-                            onClick={() => { onShowStats(); setIsMenuOpen(false); }}
-                            className="w-full text-left px-6 py-4 hover:bg-brand-yellow text-sm font-bold uppercase tracking-wide border-b-2 border-brand-darkBlue flex items-center gap-2 text-brand-darkBlue transition-colors"
-                        >
-                            📊 Rap Sheet
+                        <button onClick={() => { onShowStats(); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 hover:bg-brand-teal/20 font-bold text-brand-text transition-colors">
+                            👤 My Profile
                         </button>
-                        <button 
-                            onClick={() => { onShowHelp(); setIsMenuOpen(false); }}
-                            className="w-full text-left px-6 py-4 hover:bg-brand-teal text-sm font-bold uppercase tracking-wide border-b-2 border-brand-darkBlue flex items-center gap-2 text-brand-darkBlue transition-colors"
-                        >
-                            ❔ How to Lie
+                        <button onClick={() => { onShowHelp(); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 hover:bg-brand-teal/20 font-bold text-brand-text transition-colors">
+                            ❔ How to Play
                         </button>
                         {userName && (
-                            <div>
-                                <button 
-                                    onClick={() => { onLogout(); setIsMenuOpen(false); }}
-                                    className="w-full text-left px-6 py-4 hover:bg-brand-red hover:text-white text-brand-red text-sm font-bold uppercase tracking-wide flex items-center gap-2 transition-colors"
-                                >
-                                    🚪 Bail Out
-                                </button>
-                            </div>
+                            <button onClick={() => { onLogout(); setIsMenuOpen(false); }} className="w-full text-left px-6 py-3 hover:bg-brand-coral/20 text-brand-coral font-bold transition-colors">
+                                🚪 Leave Game
+                            </button>
                         )}
                     </div>
                 )}
@@ -143,10 +136,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
       
        {!minimal && isMenuOpen && (
-        <div 
-            className="fixed inset-0 z-[-1]" 
-            onClick={() => setIsMenuOpen(false)}
-        />
+        <div className="fixed inset-0 z-[-1]" onClick={() => setIsMenuOpen(false)} />
        )}
     </nav>
   );

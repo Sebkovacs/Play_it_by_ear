@@ -18,6 +18,7 @@ export const RevealView: React.FC<RevealViewProps> = ({ gameState, myPlayerId, o
   const [revealVisible, setRevealVisible] = useState(false);
   const myPlayer = gameState.players.find(p => p.id === myPlayerId);
   const isStarter = gameState.starterId === myPlayerId;
+  const readyCount = gameState.players.filter(p => p.isReady).length;
   
   if (!myPlayer) return <div>Error: Player not found</div>;
 
@@ -34,31 +35,33 @@ export const RevealView: React.FC<RevealViewProps> = ({ gameState, myPlayerId, o
           <h2 className="text-3xl font-black text-brand-darkBlue">{myPlayer.name}</h2>
           {isStarter && (
              <div className="flex items-center justify-center gap-1 text-brand-orange text-xs font-black uppercase tracking-wider animate-pulse">
-                <StarIcon /> The Instigator
+                <StarIcon /> The Starter
              </div>
           )}
         </div>
 
-        <div className="flex-1 flex flex-col items-center justify-center py-8">
+        <div className="flex-1 flex flex-col items-center justify-center py-8 w-full">
           {!revealVisible ? (
-            <div className="text-center space-y-6">
-               <p className="text-brand-navy text-lg">Your fate is sealed.</p>
-               <Button onClick={() => setRevealVisible(true)} className="h-16 px-8 text-lg bg-brand-teal hover:bg-brand-teal/90 text-white">
-                 View Cover Story
-               </Button>
+            <div className="text-center space-y-6 w-full px-8">
+               <p className="text-brand-navy text-lg font-medium">Your role is ready.</p>
+               <div className="border-2 border-dashed border-blue-400 p-2 rounded-xl w-full">
+                   <Button onClick={() => setRevealVisible(true)} className="h-16 text-lg w-full border-0">
+                     VIEW COVER STORY
+                   </Button>
+               </div>
             </div>
           ) : (
             <div className="space-y-6 text-center animate-fadeIn w-full">
               {myPlayer.role === PlayerRole.TONE_DEAF ? (
-                <div className="p-8 bg-brand-yellow/10 rounded-2xl border-2 border-dashed border-brand-yellow">
-                  <h3 className="text-2xl font-black text-brand-yellow uppercase tracking-widest">Tone Deaf</h3>
-                  <p className="mt-4 text-brand-navy font-medium">You have no idea what is going on.</p>
-                  <p className="text-sm text-brand-navy/60 mt-2">Just blend in. Don't get caught.</p>
+                <div className="p-8 bg-brand-yellow/10 rounded-2xl border-2 border-dashed border-brand-yellow mx-4">
+                  <h3 className="text-2xl font-black text-brand-yellow uppercase tracking-widest">Outsider</h3>
+                  <p className="mt-4 text-brand-navy font-medium">You don't know the topic.</p>
+                  <p className="text-sm text-brand-navy/60 mt-2">Listen carefully and blend in.</p>
                 </div>
               ) : (
-                <div className={`p-6 rounded-2xl ${myPlayer.role === PlayerRole.SCENARIO_A ? 'bg-brand-navy/5 text-brand-navy' : 'bg-brand-orange/5 text-brand-orange'}`}>
+                <div className={`p-6 mx-4 rounded-2xl ${myPlayer.role === PlayerRole.SCENARIO_A ? 'bg-brand-coral/10 text-brand-coral border-2 border-brand-coral' : 'bg-blue-50 text-blue-600 border-2 border-blue-500'}`}>
                   <h3 className="text-sm font-bold uppercase tracking-wider mb-2 opacity-70">
-                      {myPlayer.role === PlayerRole.SCENARIO_A ? "Serious Team" : "Absurd Team"}
+                      {myPlayer.role === PlayerRole.SCENARIO_A ? "Red Team" : "Blue Team"}
                   </h3>
                   <p className="text-xl font-medium leading-relaxed">
                     {myPlayer.role === PlayerRole.SCENARIO_A ? gameState.scenarios?.scenarioA : gameState.scenarios?.scenarioB}
@@ -67,17 +70,31 @@ export const RevealView: React.FC<RevealViewProps> = ({ gameState, myPlayerId, o
               )}
 
               {isStarter && (
-                  <div className="mt-4 p-4 bg-brand-darkBlue text-white rounded-xl shadow-hard border-2 border-brand-teal relative">
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-teal text-brand-darkBlue text-[10px] font-black uppercase px-2 py-1 rounded">Read This Loudly</div>
+                  <div className="mt-4 mx-4 p-4 bg-brand-darkBlue text-white rounded-xl shadow-hard border-2 border-brand-teal relative">
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-teal text-brand-darkBlue text-[10px] font-black uppercase px-2 py-1 rounded">Read Aloud</div>
                       <p className="text-lg font-bold italic">"{gameState.scenarios?.openingQuestion}"</p>
                   </div>
               )}
               
-              <div className="pt-4 space-y-2">
-                  <p className="text-xs text-brand-navy/40 italic">Do NOT read your role aloud, genius.</p>
-                <Button variant="outlined" onClick={onMarkReady} fullWidth className="border-brand-teal text-brand-teal hover:bg-brand-teal/5">
-                  Start Deceiving
+              <div className="pt-4 space-y-3 px-4">
+                <Button 
+                    variant={myPlayer.isReady ? 'filled' : 'outlined'} 
+                    onClick={onMarkReady} // Uses toggleReady in App.tsx
+                    fullWidth 
+                    className={`transition-all ${myPlayer.isReady ? 'bg-green-500 border-brand-darkBlue text-white' : 'border-brand-teal text-brand-teal hover:bg-brand-teal/5'}`}
+                >
+                  {myPlayer.isReady ? 'WAITING FOR OTHERS...' : "I'VE READ IT"}
                 </Button>
+                
+                <div className="text-xs font-bold text-brand-navy/30 uppercase tracking-widest">
+                    {readyCount} / {gameState.players.length} Ready
+                </div>
+                
+                {!myPlayer.isReady && (
+                    <button onClick={() => setRevealVisible(false)} className="text-xs text-brand-navy/40 hover:text-brand-navy underline">
+                        Hide Role
+                    </button>
+                )}
               </div>
             </div>
           )}

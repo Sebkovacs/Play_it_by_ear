@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { GameState, PlayerRole, GameMode } from '../../types';
+import { GameState, PlayerRole, GameMode, GamePhase } from '../../types';
 import { Button } from '../Button';
 import { Modal } from '../Modal';
+import { Card } from '../Card';
 
 interface GameViewProps {
   gameState: GameState;
@@ -13,37 +14,25 @@ interface GameViewProps {
   isHost: boolean;
 }
 
-// Icons
-const MegaphoneIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M120-320v-160h160l200-200v560L280-320H120Zm424 84L482-300q33-18 53.5-50t20.5-70q0-38-20.5-70T482-540l62-64q45 27 72.5 73.5T644-420q0 58-27.5 104.5T544-236Zm104 104L590-190q60-31 97-89t37-141q0-83-37-141t-97-89l58-58q72 43 115.5 114.5T808-420q0 86-43.5 157.5T648-132Z"/></svg>
-);
-const EyeIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M480-320q75 0 127.5-52.5T660-500q0-75-52.5-127.5T480-680q-75 0-127.5 52.5T300-500q0 75 52.5 127.5T480-320Zm0-72q-45 0-76.5-31.5T372-500q0-45 31.5-76.5T480-608q45 0 76.5 31.5T588-500q0 45-31.5 76.5T480-392Zm0 192q-146 0-266-81.5T40-500q54-137 174-218.5T480-800q146 0 266 81.5T920-500q-54 137-174 218.5T480-200Z"/></svg>
-);
-
 export const GameView: React.FC<GameViewProps> = ({ 
-  gameState, 
-  myPlayerId, 
-  onInitiateGuess, 
-  onCancelGuess, 
-  onSubmitGuess 
+  gameState, myPlayerId, onInitiateGuess, onCancelGuess, onSubmitGuess 
 }) => {
   const [showPeek, setShowPeek] = useState(false);
   const [guesses, setGuesses] = useState<Record<string, PlayerRole>>({});
   
-  const myPlayer = gameState.players.find(p => p.id === myPlayerId);
-  const guesser = gameState.players.find(p => p.id === gameState.guesserId);
+  const myPlayer = gameState.players?.find(p => p.id === myPlayerId);
+  const guesser = gameState.players?.find(p => p.id === gameState.guesserId);
   const isGuesser = gameState.guesserId === myPlayerId;
   const isGuessingPhase = gameState.phase === 'GUESSING';
+  const isShootout = gameState.phase === GamePhase.SHOOTOUT;
   
   const myScore = gameState.scores[myPlayerId] || 0;
-  const canAffordGuess = myScore >= 2;
+  const canAffordGuess = myScore >= 3 || isShootout;
 
-  // Initialize guesses when entering guessing phase
   useEffect(() => {
     if (isGuessingPhase && isGuesser) {
        const initialGuesses: Record<string, PlayerRole> = {};
-       gameState.players.forEach(p => {
+       (gameState.players || []).forEach(p => {
            if (p.id !== myPlayerId) initialGuesses[p.id] = PlayerRole.SCENARIO_A;
        });
        setGuesses(initialGuesses);
@@ -54,132 +43,129 @@ export const GameView: React.FC<GameViewProps> = ({
       setGuesses(prev => ({ ...prev, [targetId]: role }));
   };
 
-  const getRoleColor = (role: PlayerRole) => {
-      switch(role) {
-          case PlayerRole.SCENARIO_A: return 'bg-brand-navy text-white';
-          case PlayerRole.SCENARIO_B: return 'bg-brand-orange text-brand-darkBlue';
-          case PlayerRole.TONE_DEAF: return 'bg-brand-yellow text-brand-darkBlue';
-          default: return 'bg-gray-200';
-      }
-  };
-
   if (!myPlayer) return null;
 
   return (
     <div className="flex-1 p-4 pb-24 flex flex-col max-w-lg mx-auto w-full relative">
       
-      {/* Top Bar: Scores */}
-      <div className="flex items-center justify-between bg-white border-2 border-brand-darkBlue rounded-xl p-3 shadow-hard-sm mb-6">
-           <div className="flex flex-col">
-               <span className="text-[10px] font-black uppercase text-brand-navy/40 tracking-widest">Street Cred</span>
-               <span className={`text-2xl font-black ${myScore < 0 ? 'text-brand-red' : 'text-brand-darkBlue'}`}>{myScore}</span>
+      {/* Scoreboard Pill */}
+      <div className="flex items-center justify-between bg-white border-3 border-brand-text rounded-full p-2 pl-4 shadow-pop-sm mb-6 sticky top-20 z-20">
+           <div className="flex items-center gap-2">
+               <span className="text-xs font-bold uppercase text-brand-text/50">My Score</span>
+               <span className="text-2xl font-black text-brand-purple">{myScore}</span>
            </div>
-           <div className="h-8 w-[2px] bg-brand-navy/10"></div>
-           <div className="flex flex-col text-right">
-                <span className="text-[10px] font-black uppercase text-brand-navy/40 tracking-widest">
-                    {gameState.gameMode === GameMode.ROUNDS ? "Round" : "Goal"}
-                </span>
-                <span className="text-xl font-bold text-brand-darkBlue">
-                    {gameState.gameMode === GameMode.ROUNDS 
-                        ? `${gameState.currentRound}/${gameState.targetValue}`
-                        : `${gameState.targetValue} pts`
-                    }
-                </span>
+           <div className="bg-brand-yellow px-4 py-1 rounded-full border-2 border-brand-text font-bold text-sm">
+               {gameState.gameMode === GameMode.ROUNDS 
+                   ? `Round ${gameState.currentRound} / ${gameState.targetValue}`
+                   : `Goal: ${gameState.targetValue} pts`
+               }
            </div>
       </div>
+      
+      {gameState.notification && (
+        <div className="mb-6 p-4 bg-brand-coral text-white border-3 border-brand-text rounded-2xl font-bold text-center shadow-pop animate-bounce-slight">
+            {gameState.notification}
+        </div>
+      )}
 
       {/* Main Gameplay Area */}
       {!isGuessingPhase ? (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-fadeIn">
+          <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-fadeIn pb-12">
+              
               <div className="text-center space-y-4">
-                 <div className="w-24 h-24 bg-brand-teal rounded-full flex items-center justify-center mx-auto border-4 border-brand-darkBlue shadow-hard animate-pulse">
-                    <div className="text-brand-darkBlue"><MegaphoneIcon /></div>
-                 </div>
-                 <h2 className="text-3xl font-black text-brand-darkBlue uppercase tracking-tight">Blend In or Die</h2>
-                 <p className="text-brand-navy font-medium max-w-xs mx-auto">
-                    Discuss the topic vaguely. Lie to your enemies. Don't be weird about it.
-                 </p>
+                  <div className="w-32 h-32 bg-brand-teal rounded-full flex items-center justify-center mx-auto border-4 border-brand-text shadow-pop relative group cursor-pointer hover:scale-105 transition-transform" onClick={() => setShowPeek(true)}>
+                      <span className="text-5xl group-hover:hidden">🗣️</span>
+                      <span className="text-xl font-bold hidden group-hover:block text-white text-center leading-tight px-2">View Role</span>
+                  </div>
+                  <h2 className="font-display font-black text-4xl text-brand-text">Discuss!</h2>
+                  <p className="text-brand-text/70 font-medium max-w-xs mx-auto bg-white p-4 rounded-xl border-2 border-brand-text/10">
+                     Try to find your team. Keep your story straight. Don't let the Outsider catch on!
+                  </p>
               </div>
 
               <div className="w-full space-y-4">
                   <Button 
                     fullWidth 
+                    variant="filled"
                     onClick={onInitiateGuess} 
                     disabled={!canAffordGuess}
-                    className="h-20 text-xl bg-brand-red text-white border-brand-darkBlue hover:bg-brand-red/90 disabled:bg-gray-300 disabled:text-gray-500"
+                    className={`h-20 text-xl shadow-pop ${!canAffordGuess ? 'bg-gray-200 text-gray-400 border-gray-300' : 'bg-brand-coral text-white'}`}
                   >
-                      {canAffordGuess ? "ACCUSE SCUM [-2 Pts]" : "Too Poor to Accuse"}
+                      {canAffordGuess 
+                        ? (isShootout ? "Sudden Death Accusation!" : "Accuse Player (-3 Pts)") 
+                        : "Need 3 Pts to Accuse"
+                      }
                   </Button>
-                  <Button variant="outlined" fullWidth onClick={() => setShowPeek(true)} className="gap-2 bg-white hover:bg-brand-teal/10">
-                      <EyeIcon /> What am I doing again?
-                  </Button>
+                  
+                  <button onClick={() => setShowPeek(true)} className="w-full py-4 text-center font-bold text-brand-text/50 hover:text-brand-purple underline decoration-2">
+                      Review My Secret Role
+                  </button>
               </div>
           </div>
       ) : (
           <div className="flex-1 flex flex-col animate-fadeIn">
-              <div className="bg-brand-red text-white p-4 rounded-xl border-2 border-brand-darkBlue shadow-hard mb-6 text-center">
-                  <h3 className="font-black uppercase tracking-widest text-sm mb-1">Snitch in Progress</h3>
-                  <p className="text-lg font-bold">{isGuesser ? "Expose them all!" : `${guesser?.name} is trying to ruin the vibe!`}</p>
+              <div className="bg-white p-6 rounded-3xl border-3 border-brand-text shadow-pop mb-6 text-center">
+                  <div className="w-12 h-12 bg-brand-coral rounded-full flex items-center justify-center text-2xl border-2 border-brand-text absolute -top-4 left-1/2 -translate-x-1/2">
+                      🚨
+                  </div>
+                  <h3 className="font-display font-black text-xl mt-2">{isGuesser ? "Who is who?" : `${guesser?.name} is accusing!`}</h3>
+                  <p className="text-sm font-medium opacity-70 mt-1">If they guess everyone's role correctly, they win.</p>
               </div>
 
               {isGuesser ? (
                   <div className="space-y-4 mb-8">
-                      {gameState.players.filter(p => p.id !== myPlayerId).map(p => (
-                          <div key={p.id} className="bg-white p-4 rounded-xl border-2 border-brand-darkBlue shadow-hard-sm">
-                              <div className="font-bold text-brand-darkBlue mb-2">{p.name} is...</div>
+                      {(gameState.players || []).filter(p => p.id !== myPlayerId).map(p => (
+                          <Card key={p.id} className="p-4 bg-white">
+                              <div className="font-bold text-brand-text mb-2 text-lg">{p.name} is...</div>
                               <div className="grid grid-cols-3 gap-2">
-                                  {[PlayerRole.SCENARIO_A, PlayerRole.SCENARIO_B, PlayerRole.TONE_DEAF].map(role => (
-                                      <button
-                                          key={role}
-                                          onClick={() => handleRoleSelect(p.id, role)}
-                                          className={`p-2 rounded text-[10px] font-black uppercase border-2 transition-all ${guesses[p.id] === role ? 'border-brand-darkBlue shadow-hard-sm scale-105 ' + getRoleColor(role) : 'border-transparent bg-gray-100 text-gray-400'}`}
-                                      >
-                                          {role === PlayerRole.SCENARIO_A ? "Serious" : role === PlayerRole.SCENARIO_B ? "Absurd" : "Imposter"}
-                                      </button>
-                                  ))}
+                                  <button onClick={() => handleRoleSelect(p.id, PlayerRole.SCENARIO_A)} className={`p-2 rounded-lg text-xs font-bold border-2 transition-all ${guesses[p.id] === PlayerRole.SCENARIO_A ? 'bg-brand-coral text-white border-brand-text shadow-pop-sm' : 'bg-gray-100 border-transparent text-gray-400'}`}>Team Red</button>
+                                  <button onClick={() => handleRoleSelect(p.id, PlayerRole.SCENARIO_B)} className={`p-2 rounded-lg text-xs font-bold border-2 transition-all ${guesses[p.id] === PlayerRole.SCENARIO_B ? 'bg-blue-500 text-white border-brand-text shadow-pop-sm' : 'bg-gray-100 border-transparent text-gray-400'}`}>Team Blue</button>
+                                  <button onClick={() => handleRoleSelect(p.id, PlayerRole.TONE_DEAF)} className={`p-2 rounded-lg text-xs font-bold border-2 transition-all ${guesses[p.id] === PlayerRole.TONE_DEAF ? 'bg-brand-yellow text-brand-text border-brand-text shadow-pop-sm' : 'bg-gray-100 border-transparent text-gray-400'}`}>Outsider</button>
                               </div>
-                          </div>
+                          </Card>
                       ))}
                       <div className="flex gap-4 pt-4">
-                          <Button variant="text" onClick={onCancelGuess} className="flex-1 text-xs">Nevermind</Button>
-                          <Button onClick={() => onSubmitGuess(guesses)} className="flex-[2] bg-brand-red text-white hover:bg-brand-red/90">Destroy Them</Button>
+                          <Button variant="outlined" onClick={onCancelGuess} className="flex-1">Cancel</Button>
+                          <Button variant="filled" onClick={() => onSubmitGuess(guesses)} className="flex-[2] !bg-green-500 hover:bg-green-600 !border-green-700">Lock In</Button>
                       </div>
                   </div>
               ) : (
-                  <div className="flex-1 flex items-center justify-center text-center opacity-50">
-                      <p>Pray they don't pick you...</p>
+                  <div className="flex-1 flex items-center justify-center text-center opacity-50 p-8">
+                      <p className="font-bold text-xl">The accusation is happening...</p>
                   </div>
               )}
           </div>
       )}
 
       {/* Peek Modal */}
-      <Modal isOpen={showPeek} onClose={() => setShowPeek(false)} title="Your Cover Story">
+      <Modal isOpen={showPeek} onClose={() => setShowPeek(false)} title="Your Secret Role">
           <div className="space-y-6 text-center">
               {myPlayer.role === PlayerRole.TONE_DEAF ? (
-                <div className="p-6 bg-brand-yellow/10 rounded-xl border-2 border-dashed border-brand-yellow">
-                  <h3 className="text-xl font-black text-brand-yellow uppercase tracking-widest">Imposter (Tone Deaf)</h3>
-                  <p className="mt-2 text-brand-navy">You have no context. Good luck.</p>
+                <div className="p-8 bg-brand-yellow/20 rounded-3xl border-3 border-brand-yellow">
+                  <div className="text-4xl mb-2">🤔</div>
+                  <h3 className="text-2xl font-display font-black text-brand-text uppercase">The Outsider</h3>
+                  <p className="mt-2 font-bold text-brand-text/80">You don't know the topic!</p>
+                  <p className="text-sm mt-2">Listen to others and try to blend in.</p>
                 </div>
               ) : (
-                <div className={`p-6 rounded-xl border-2 border-brand-darkBlue ${myPlayer.role === PlayerRole.SCENARIO_A ? 'bg-brand-navy/5' : 'bg-brand-orange/5'}`}>
+                <div className={`p-8 rounded-3xl border-3 ${myPlayer.role === PlayerRole.SCENARIO_A ? 'bg-brand-coral/10 border-brand-coral' : 'bg-blue-50 border-blue-500'}`}>
                   <h3 className="text-xs font-bold uppercase tracking-wider mb-2 opacity-50">
-                      {myPlayer.role === PlayerRole.SCENARIO_A ? "Serious Team" : "Absurd Team"}
+                      {myPlayer.role === PlayerRole.SCENARIO_A ? "Team Red" : "Team Blue"}
                   </h3>
-                  <p className="text-lg font-bold text-brand-darkBlue">
+                  <p className="text-2xl font-display font-black text-brand-text leading-tight">
                     {myPlayer.role === PlayerRole.SCENARIO_A ? gameState.scenarios?.scenarioA : gameState.scenarios?.scenarioB}
                   </p>
                 </div>
               )}
               
               {gameState.starterId === myPlayerId && (
-                   <div className="text-left bg-brand-teal/10 p-3 rounded-lg border border-brand-teal/20">
-                       <span className="text-[10px] font-bold text-brand-teal uppercase tracking-wider">Your Opening Line</span>
-                       <p className="text-brand-darkBlue font-medium italic text-sm">"{gameState.scenarios?.openingQuestion}"</p>
+                   <div className="text-left bg-brand-purple text-white p-4 rounded-xl border-3 border-brand-text shadow-pop-sm">
+                       <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded">You Start</span>
+                       <p className="font-bold text-lg mt-1 italic">"{gameState.scenarios?.openingQuestion}"</p>
                    </div>
               )}
 
-              <Button fullWidth onClick={() => setShowPeek(false)}>Hide Evidence</Button>
+              <Button fullWidth onClick={() => setShowPeek(false)}>Hide</Button>
           </div>
       </Modal>
 

@@ -1,7 +1,8 @@
+
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'filled' | 'outlined' | 'text' | 'tonal';
+  variant?: 'filled' | 'outlined' | 'text' | 'tonal' | 'success';
   fullWidth?: boolean;
 }
 
@@ -14,26 +15,28 @@ export const Button: React.FC<ButtonProps> = ({
   ...props 
 }) => {
   
-  // Base: Bold border, hard shadow transition, uppercase text
-  const baseStyles = "relative h-14 px-6 rounded-lg font-black text-sm tracking-wider uppercase transition-all duration-150 flex items-center justify-center gap-2 border-2 border-brand-darkBlue active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-50 disabled:pointer-events-none disabled:shadow-none";
+  // Base: Rounded, bold, bouncy interaction
+  const baseStyles = "relative h-14 px-6 rounded-2xl font-display font-bold text-lg tracking-wide transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 disabled:pointer-events-none disabled:active:scale-100";
   
   const variants = {
-    // Primary action: Black or Pop Color with Hard Shadow
-    filled: "bg-brand-darkBlue text-white shadow-hard hover:bg-brand-navy hover:shadow-hard-lg",
+    // Primary: Vivid Purple with soft shadow
+    filled: "bg-brand-purple text-white shadow-pop hover:shadow-pop-lg hover:-translate-y-0.5 border-2 border-brand-text",
     
-    // Secondary: Light background, Hard Shadow
-    tonal: "bg-brand-teal text-brand-darkBlue shadow-hard hover:bg-brand-teal/80 hover:shadow-hard-lg",
+    // Success: Green (Accept/Proceed/Ready)
+    success: "bg-green-500 text-white shadow-pop hover:shadow-pop-lg hover:-translate-y-0.5 border-2 border-green-700",
     
-    // Outlined: Transparent, border, hard shadow
-    outlined: "bg-transparent text-brand-darkBlue shadow-hard hover:bg-brand-darkBlue/5",
+    // Secondary: Teal
+    tonal: "bg-brand-teal text-brand-text shadow-pop hover:shadow-pop-lg hover:-translate-y-0.5 border-2 border-brand-text",
     
-    // Text: No shadow, just bold text
-    text: "border-transparent bg-transparent text-brand-darkBlue hover:bg-brand-darkBlue/5 shadow-none active:translate-x-0 active:translate-y-0"
+    // Outlined: Border only
+    outlined: "bg-white text-brand-text border-2 border-brand-text shadow-pop hover:shadow-pop-lg hover:-translate-y-0.5",
+    
+    // Text: Simple
+    text: "bg-transparent text-brand-text hover:bg-brand-text/5 shadow-none border-transparent active:scale-100 hover:text-brand-purple"
   };
 
   const widthStyle = fullWidth ? "w-full" : "";
 
-  // Override specific variants if classname passes bg colors to maintain the hard shadow style
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${widthStyle} ${className}`}

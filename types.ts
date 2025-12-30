@@ -1,4 +1,5 @@
 
+
 export enum GamePhase {
   LANDING = 'LANDING',
   LOBBY = 'LOBBY',
@@ -6,8 +7,10 @@ export enum GamePhase {
   REVEAL = 'REVEAL', 
   PLAYING = 'PLAYING',
   GUESSING = 'GUESSING', 
+  SHOOTOUT = 'SHOOTOUT', 
+  OUTSIDER_GUESS = 'OUTSIDER_GUESS', 
   RESULT = 'RESULT',
-  VOTING = 'VOTING', // New Phase
+  VOTING = 'VOTING',
   GAME_OVER = 'GAME_OVER',
   ERROR = 'ERROR'
 }
@@ -24,25 +27,33 @@ export enum PlayerRole {
   PENDING = 'PENDING'
 }
 
+export enum TopicPack {
+  STANDARD = 'STANDARD',
+  SCIFI = 'SCIFI',
+  NSFW = 'NSFW',
+  HISTORY = 'HISTORY',
+  FOODIE = 'FOODIE'
+}
+
 export interface PlayerPublicStats {
   wins: number;
   gamesPlayed: number;
   title: string;
   description: string;
+  archetype?: string;
 }
 
 export interface Player {
   id: string; 
-  peerId: string; 
   name: string;
   role: PlayerRole;
   isHost: boolean;
   hasViewed: boolean;
   isReady: boolean;
   topicSuggestion: string;
-  hasVoted: boolean; // For the voting phase
-  stats?: PlayerPublicStats; // Publicly visible stats
-  uid?: string; // Firebase UID for deep fetching history
+  hasVoted: boolean; 
+  stats?: PlayerPublicStats; 
+  uid?: string; 
 }
 
 export interface Scenarios {
@@ -65,74 +76,114 @@ export interface RoundHistory {
   topic: string;
   winner: string; 
   timestamp: number;
+  role?: PlayerRole; 
+  wasCorrect?: boolean; 
+  wasCaught?: boolean; 
+  votesReceived?: number; 
+  
+  accuser?: string; 
+  accused?: string; 
 }
 
 export interface GameResult {
   winner: string;
   reason: string;
   guesserName?: string;
+  guesserId?: string; 
   wasCorrect?: boolean;
   pointDeltas?: Record<string, number>;
-  // Round specific awards (optional, generated if interesting things happened)
   awards?: Record<string, Award>; 
+  
+  accusation?: {
+      accuser: string; 
+      target: string; 
+      roleGuessed: PlayerRole;
+      wasCorrect: boolean;
+  };
+}
+
+export interface PlaystyleAttributes {
+  chaos: number;    // How unpredictable
+  smarts: number;   // Deduction skill
+  vibes: number;    // Social skill
+  stealth: number;  // Avoiding detection
+  luck: number;     // Pure RNG
+}
+
+export interface RelationshipStat {
+  playerId: string;
+  playerName: string;
+  gamesPlayed: number;
+  winsWith: number; // Partner in Crime
+  accusedByMe: number; // Rival
+  accusedMe: number; // Rival
+}
+
+export interface Moment {
+  id: string;
+  title: string;
+  summary: string;
+  topic: string;
+  role: PlayerRole;
+  timestamp: number;
+  isPinned: boolean;
+  emoji?: string;
 }
 
 export interface UserStats {
   gamesPlayed: number;
   wins: number;
-  // New Profile Data
   personaTitle?: string;
   personaDescription?: string;
-  tags?: Record<string, number>; // Tag -> Count
+  archetype?: string; 
+  attributes?: PlaystyleAttributes;
+  tags?: Record<string, number>; 
+  
+  scoutingReport?: string; 
+  relationships?: Record<string, RelationshipStat>; 
+  moments?: Moment[];
 }
 
 export interface VoteSubmission {
   bestPlayerId: string;
-  bestReason: string;
   worstPlayerId: string;
-  worstReason: string;
-  descriptors: Record<string, string>; // TargetID -> Adjective
+  descriptors: Record<string, string>; 
 }
 
 export interface GameState {
+  lastUpdated: number; 
   phase: GamePhase;
   players: Player[];
   scenarios: Scenarios | null;
   error: string | null;
+  notification: string | null; 
   roomCode: string | null;
   revealedPlayers: string[]; 
   countdown: number | null; 
   history: RoundHistory[];
   lastResult: GameResult | null;
   guesserId: string | null; 
+  caughtPlayerId?: string | null; 
   starterId: string | null; 
   
   gameMode: GameMode;
   currentRound: number;
   targetValue: number; 
   maxToneDeaf: number; 
+  topicPack: TopicPack; 
+
   scores: Record<string, number>; 
   
-  // New Accumulators
-  accumulatedDescriptors: Record<string, string[]>; // PlayerID -> List of tags
-  accumulatedReasons: Record<string, string[]>; // PlayerID -> List of 'Best/Worst' comments
+  accumulatedDescriptors: Record<string, string[]>; 
+  accumulatedReasons: Record<string, string[]>; 
   endGameAwards: Record<string, Award> | null;
 }
 
-export type MessageType = 'STATE_UPDATE' | 'JOIN_REQUEST' | 'TOGGLE_READY' | 'SUBMIT_TOPIC' | 'START_GUESS' | 'SUBMIT_GUESS' | 'CANCEL_GUESS' | 'REVEAL_GUESS' | 'RESET_GAME' | 'NEXT_ROUND' | 'SUBMIT_VOTES';
-
-export interface NetworkMessage {
-  type: MessageType;
-  payload: any;
-  senderId?: string;
-}
-
-// The 24 Options
 export const DESCRIPTORS = [
-  "Chaotic", "Sweaty", "Genius", "Unhinged", 
-  "Robot", "Loud", "Sneaky", "Clueless", 
-  "Dramatic", "Thirsty", "Salty", "Moist", 
-  "Basic", "Extra", "Sketchy", "Wholesome", 
-  "Toxic", "Cringe", "Iconic", "Feral", 
-  "Chill", "Sus", "Smooth", "Petty"
+  "Chaotic", "Genius", "Quiet", "Loud",
+  "Sneaky", "Honest", "Lucky", "Clueless",
+  "Sweaty", "Chill", "Funny", "Serious",
+  "Leader", "Follower", "Wildcard", "Trusting",
+  "Salty", "Helpful", "Confused", "Sharp",
+  "Bold", "Shy", "Friendly", "Ruthless"
 ];

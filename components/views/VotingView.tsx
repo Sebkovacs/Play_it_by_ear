@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { GameState, Player, DESCRIPTORS, VoteSubmission } from '../../types';
 import { Button } from '../Button';
 import { Card } from '../Card';
-import { InputField } from '../InputField';
 
 interface VotingViewProps {
   gameState: GameState;
@@ -15,9 +14,7 @@ interface VotingViewProps {
 
 export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, onSubmitVotes, isHost, onHostNext }) => {
   const [bestId, setBestId] = useState('');
-  const [bestReason, setBestReason] = useState('');
   const [worstId, setWorstId] = useState('');
-  const [worstReason, setWorstReason] = useState('');
   const [tags, setTags] = useState<Record<string, string>>({});
   const [step, setStep] = useState(1);
 
@@ -29,26 +26,28 @@ export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, o
   if (myPlayer?.hasVoted) {
       return (
           <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 animate-fadeIn pb-24">
-              <div className="text-6xl animate-bounce">🗳️</div>
-              <h2 className="text-2xl font-black text-brand-darkBlue uppercase tracking-tighter">Vibe Check Submitted</h2>
-              <p className="text-brand-navy font-bold text-center">Waiting for everyone else to judge you...</p>
+              <div className="text-6xl animate-bounce-slight">🗳️</div>
+              <h2 className="text-2xl font-display font-black text-brand-text uppercase">Vote Locked In!</h2>
+              <p className="text-brand-text/60 font-bold text-center">Waiting for the slowpokes...</p>
               
-              <div className="flex flex-wrap gap-2 justify-center max-w-xs">
+              <div className="flex flex-wrap gap-3 justify-center max-w-xs mt-4">
                  {gameState.players.map(p => (
                      <div key={p.id} className="flex flex-col items-center gap-1">
-                        <div className={`w-4 h-4 rounded-full border border-brand-darkBlue ${p.hasVoted ? 'bg-brand-teal' : 'bg-brand-navy/20'}`} />
-                        <span className="text-[10px] font-bold uppercase">{p.name.slice(0,6)}</span>
+                        <div className={`w-10 h-10 rounded-full border-2 border-brand-text flex items-center justify-center transition-all ${p.hasVoted ? 'bg-brand-teal text-white' : 'bg-white text-brand-text/20'}`}>
+                             {p.hasVoted ? '✓' : '...'}
+                        </div>
+                        <span className="text-[10px] font-bold uppercase text-brand-text/50">{p.name.slice(0,6)}</span>
                      </div>
                  ))}
               </div>
 
               {isHost && (
-                  <div className="mt-8 p-4 bg-white rounded-xl border-2 border-brand-darkBlue shadow-hard w-full max-w-sm">
-                      <p className="text-xs font-black uppercase text-brand-navy mb-3 text-center">Host Controls</p>
+                  <div className="mt-8 p-4 bg-white rounded-2xl border-2 border-brand-text shadow-pop w-full max-w-sm">
+                      <p className="text-xs font-bold uppercase text-brand-text/40 mb-3 text-center">Host Controls</p>
                       <Button fullWidth onClick={onHostNext} disabled={!allVoted}>
-                          {allVoted ? "Finalize & Next Round" : "Waiting for Votes..."}
+                          {allVoted ? "Reveal Results" : "Waiting..."}
                       </Button>
-                      {!allVoted && <p className="text-[10px] text-center mt-2 text-brand-red font-bold">You can force skip if needed, but it ruins the data.</p>}
+                      {!allVoted && <button className="text-xs text-center w-full mt-3 text-brand-coral font-bold hover:underline" onClick={onHostNext}>Skip Voting</button>}
                   </div>
               )}
           </div>
@@ -57,7 +56,7 @@ export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, o
 
   const handleNext = () => {
       if (step === 1) {
-          if (!bestId || !bestReason || !worstId || !worstReason) return;
+          if (!bestId || !worstId) return;
           setStep(2);
       } else {
           // Check if all others are tagged
@@ -66,9 +65,7 @@ export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, o
 
           onSubmitVotes({
               bestPlayerId: bestId,
-              bestReason: bestReason,
               worstPlayerId: worstId,
-              worstReason: worstReason,
               descriptors: tags
           });
       }
@@ -81,53 +78,51 @@ export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, o
   return (
     <div className="flex-1 p-6 max-w-lg mx-auto w-full flex flex-col pb-24">
       <div className="mb-6 text-center">
-        <h2 className="text-3xl font-black text-brand-darkBlue uppercase tracking-tighter">The Vibe Check</h2>
-        <p className="text-brand-navy font-bold text-sm opacity-60">Be honest. Be brutal.</p>
+        <h2 className="text-3xl font-display font-black text-brand-text">Awards Time!</h2>
+        <p className="text-brand-text/60 font-bold text-sm">Be honest (or mean).</p>
       </div>
 
       {step === 1 && (
-          <div className="space-y-8 animate-fadeIn">
-              <Card className="bg-white border-2 border-brand-darkBlue shadow-hard">
-                  <div className="flex items-center gap-2 mb-4 text-brand-teal">
-                      <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M480-80 310-250l-170-25 25-170-125-125 125-125-25-170 170-25 170-170 170 170 170 25-25 170 125 125-125 125 25 170-170 25-170 170Zm0-120q100 0 170-70t70-170q0-100-70-170t-170-70q-100 0-170 70t-70 170q0 100 70 170t170 70Z"/></svg>
-                      <h3 className="font-black uppercase">MVP (Best Player)</h3>
+          <div className="space-y-6 animate-fadeIn">
+              <Card className="bg-white border-3 border-brand-text shadow-pop relative overflow-hidden">
+                  <div className="flex items-center gap-2 mb-4 text-brand-purple">
+                      <span className="text-2xl">🏆</span>
+                      <h3 className="font-black uppercase text-lg">The MVP</h3>
                   </div>
-                  <p className="text-xs font-bold mb-2">Who fooled you or carried the team?</p>
-                  <div className="grid grid-cols-3 gap-2 mb-4">
+                  <p className="text-xs font-bold mb-3 text-brand-text/60">Who carried the conversation?</p>
+                  <div className="grid grid-cols-2 gap-3">
                       {otherPlayers.map(p => (
                           <button 
                             key={p.id}
                             onClick={() => setBestId(p.id)}
-                            className={`p-2 rounded-lg font-bold text-xs border-2 transition-all ${bestId === p.id ? 'bg-brand-teal text-white border-brand-darkBlue shadow-hard-sm' : 'bg-gray-50 border-brand-navy/10 hover:border-brand-navy/30'}`}
+                            className={`p-3 rounded-xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${bestId === p.id ? 'bg-brand-purple text-white border-brand-text shadow-pop-sm scale-[1.02]' : 'bg-brand-background border-brand-text/10 hover:border-brand-text/30 text-brand-text'}`}
                           >
                               {p.name}
                           </button>
                       ))}
                   </div>
-                  <InputField label="Why?" placeholder="e.g. Total sociopath..." value={bestReason} onChange={e => setBestReason(e.target.value)} />
               </Card>
 
-              <Card className="bg-white border-2 border-brand-darkBlue shadow-hard">
-                  <div className="flex items-center gap-2 mb-4 text-brand-red">
-                      <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 -960 960 960" width="24" fill="currentColor"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200l40-40h160l40 40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                      <h3 className="font-black uppercase">The Liability (Worst)</h3>
+              <Card className="bg-white border-3 border-brand-text shadow-pop">
+                  <div className="flex items-center gap-2 mb-4 text-brand-coral">
+                      <span className="text-2xl">👀</span>
+                      <h3 className="font-black uppercase text-lg">Most Suspicious</h3>
                   </div>
-                  <p className="text-xs font-bold mb-2">Who blew their cover or just sucked?</p>
-                  <div className="grid grid-cols-3 gap-2 mb-4">
+                  <p className="text-xs font-bold mb-3 text-brand-text/60">Who was acting weird?</p>
+                  <div className="grid grid-cols-2 gap-3">
                       {otherPlayers.map(p => (
                           <button 
                             key={p.id}
                             onClick={() => setWorstId(p.id)}
-                            className={`p-2 rounded-lg font-bold text-xs border-2 transition-all ${worstId === p.id ? 'bg-brand-red text-white border-brand-darkBlue shadow-hard-sm' : 'bg-gray-50 border-brand-navy/10 hover:border-brand-navy/30'}`}
+                            className={`p-3 rounded-xl font-bold text-sm border-2 transition-all flex items-center justify-center gap-2 ${worstId === p.id ? 'bg-brand-coral text-white border-brand-text shadow-pop-sm scale-[1.02]' : 'bg-brand-background border-brand-text/10 hover:border-brand-text/30 text-brand-text'}`}
                           >
                               {p.name}
                           </button>
                       ))}
                   </div>
-                  <InputField label="Why?" placeholder="e.g. Too obvious..." value={worstReason} onChange={e => setWorstReason(e.target.value)} />
               </Card>
               
-              <Button fullWidth onClick={handleNext} disabled={!bestId || !bestReason || !worstId || !worstReason}>
+              <Button fullWidth onClick={handleNext} disabled={!bestId || !worstId} className="h-16 text-xl" variant="success">
                   Next Step
               </Button>
           </div>
@@ -136,30 +131,29 @@ export const VotingView: React.FC<VotingViewProps> = ({ gameState, myPlayerId, o
       {step === 2 && (
           <div className="space-y-6 animate-fadeIn">
               <div className="text-center mb-2">
-                  <h3 className="font-black uppercase text-brand-darkBlue">Label Your Coworkers</h3>
-                  <p className="text-xs font-bold text-brand-navy/50">Pick ONE descriptor for each person.</p>
+                  <h3 className="font-black uppercase text-brand-text">Describe Them</h3>
+                  <p className="text-xs font-bold text-brand-text/50">Pick one word for each player.</p>
               </div>
 
               {otherPlayers.map(p => (
-                  <div key={p.id} className="bg-white p-4 rounded-xl border-2 border-brand-darkBlue shadow-hard-sm">
-                      <h4 className="font-black text-brand-darkBlue mb-3">{p.name} is...</h4>
+                  <div key={p.id} className="bg-white p-4 rounded-xl border-2 border-brand-text shadow-pop-sm">
+                      <h4 className="font-black text-brand-text mb-3 text-lg">{p.name} is...</h4>
                       <div className="grid grid-cols-3 gap-2">
-                          {DESCRIPTORS.slice(0, 12).map(tag => ( // Showing subset for brevity, or map all
+                          {DESCRIPTORS.slice(0, 15).map(tag => (
                               <button 
                                 key={tag}
                                 onClick={() => toggleTag(p.id, tag)}
-                                className={`text-[10px] font-bold uppercase py-2 border rounded transition-all ${tags[p.id] === tag ? 'bg-brand-darkBlue text-white border-brand-darkBlue' : 'bg-gray-50 border-gray-200 hover:border-brand-darkBlue'}`}
+                                className={`text-[10px] font-bold uppercase py-2 border-2 rounded-lg transition-all ${tags[p.id] === tag ? 'bg-brand-text text-white border-brand-text shadow-sm' : 'bg-brand-background border-transparent hover:border-brand-text/20 text-brand-text'}`}
                               >
                                   {tag}
                               </button>
                           ))}
-                           {/* Add 'More' button logic in real app if list is long, or just scroll */}
                       </div>
                   </div>
               ))}
 
-              <Button fullWidth onClick={handleNext} disabled={Object.keys(tags).length < otherPlayers.length}>
-                  Submit Judgment
+              <Button fullWidth onClick={handleNext} disabled={Object.keys(tags).length < otherPlayers.length} className="h-16 text-xl" variant="success">
+                  Cast Votes
               </Button>
           </div>
       )}

@@ -1,20 +1,34 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Game History Collection
-    match /game_history/{gameId} {
-      // Anyone can read the history (needed for the Landing page global stats)
+    // Game Rooms
+    // In a production app, you might restrict this further, but for a party game
+    // we allow any connected client to read/write the game state.
+    match /games/{roomCode} {
+      allow read, write: if true;
+    }
+
+    // User Stats & Profiles
+    match /users/{userId} {
+      // Public profiles (for leaderboard/viewing others)
       allow read: if true;
+      // Only the user themselves can update their stats/profile
+      allow write: if request.auth != null && request.auth.uid == userId;
       
-      // Anyone can create a new history entry if the data matches the schema
-      allow create: if request.resource.data.keys().hasAll(['topic', 'winner', 'timestamp'])
-                    && request.resource.data.topic is string
-                    && request.resource.data.winner is string
-                    && request.resource.data.timestamp is number;
-      
-      // No one can edit or delete history once written
-      allow update, delete: if false;
+      // User Awards Subcollection
+      match /awards/{awardId} {
+        allow read: if true;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Global Game History
+    match /game_history/{gameId} {
+      allow read: if true;
+      allow create: if true; // Clients write history on game end
+      allow update, delete: if false; // History is immutable
     }
   }
 }
